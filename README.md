@@ -2,6 +2,8 @@
 GUI: Tauri + React + Typescript
 API: OpenAI ChatGPT
 
+![TalkWithRustGPT](https://github.com/go-numb/TalkWithRustGPT/blob/images/public/talkwithgpt.png)
+
 ## Future
 - Switch ChatGPT model
 - Input Voice
