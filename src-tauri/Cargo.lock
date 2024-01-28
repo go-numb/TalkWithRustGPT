@@ -147,6 +147,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bouyomi4rs"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1464e3af8c62713cc29b61ce4eb8d2354028a2006230ca0ee4d7a15586f182de"
+
+[[package]]
 name = "brotli"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2899,6 +2905,7 @@ dependencies = [
 name = "talk-with-rust-gpt"
 version = "0.1.0"
 dependencies = [
+ "bouyomi4rs",
  "chatgpt_rs",
  "chrono",
  "directories",

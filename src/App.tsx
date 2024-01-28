@@ -8,6 +8,7 @@ import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognitio
 
 
 function App() {
+    const StatusNone = ""
     const StatusListen = "🎧 Listening..."
     const StatusStop = "🎧 Stoped listening."
     const StatusStart = "🎧 Start listening."
@@ -92,6 +93,9 @@ function App() {
       .finally(() => {
         reset_all_vers();
         setQuery(`<h2 class="line_wrap">Q: ${_msg}</h2>\n`);
+        if (!listening) {
+          setStatus(StatusNone);
+        }
       });
   };
 

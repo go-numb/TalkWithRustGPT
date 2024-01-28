@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // // my modules
-// mod mods;
+mod mods;
 
 use chatgpt::prelude::*;
 use chatgpt::types::{CompletionResponse, Role};
@@ -136,6 +136,9 @@ async fn gpt_request(b: u8, msg: &str) -> std::result::Result<String, String> {
         .await
         .map_err(|err| format!("ChatGPT client error: {}", err))?;
 
+    // ここにunwrap()を使っている関数の呼び出しを記述
+    mods::voice::say(res.message().content.as_str());
+
     let markdown_content =
         markdown::to_html_with_options(res.message().content.as_str(), &markdown::Options::gfm())?;
 
@@ -152,7 +155,7 @@ async fn gpt_request(b: u8, msg: &str) -> std::result::Result<String, String> {
         Ok(mut guard_message) => {
             guard_message.push(res.message().clone());
             // メッセージ履歴を表示
-            for (i, message) in messages.iter().enumerate() {
+            for (i, message) in guard_message.iter().enumerate() {
                 println!("{} - {:?}", i, message);
             }
         }
