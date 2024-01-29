@@ -10,7 +10,7 @@ pub fn say(msg: &str) {
     let client = BouyomiClient::new().set_config(config);
 
     match client.talk(msg) {
-        Ok(_) => println!("読み上げ成功"),
-        Err(e) => println!("棒読みちゃんが起動していない: {}", e),
+        Ok(_) => println!("bouyomi4rs: success"),
+        Err(e) => println!("bouyomi4rs: it is possible that bouyomi-chan is not activated.: {}", e),
     };
 }

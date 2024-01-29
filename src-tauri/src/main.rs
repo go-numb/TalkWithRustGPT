@@ -207,12 +207,8 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
             };
             guard_messages.push(pass_msg);
             // メッセージ履歴を表示
-            for (i, message) in guard_messages.iter().enumerate() {
+            for message in guard_messages.iter() {
                 tokenize_resource.push_str(message.content.as_str());
-                // println!(
-                //     "{} - role: {}, content: {}",
-                //     i, message.role, message.content
-                // );
             }
         }
         Err(e) => return Err(format!("lazy struct data lock error: {}", e)),
