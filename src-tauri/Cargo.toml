@@ -3,7 +3,7 @@ name = "talk-with-rust-gpt"
 version = "0.1.0"
 description = "Talk With Rust GPT"
 authors = ["you"]
-license = "MIT"
+licence = "MIT OR Apache-2.0"
 repository = "https://github.com/go-numb/TalkWithRustGPT"
 edition = "2021"
 
@@ -23,6 +23,9 @@ markdown = "1.0.0-alpha.16"
 chrono = "0.4.33"
 directories = "5.0.1"
 bouyomi4rs = "0.2.0"
+rs_openai = "0.4.1"
+futures = "0.3.30"
+tiktoken-rs = "0.5.8"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

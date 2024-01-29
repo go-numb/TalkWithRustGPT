@@ -4,15 +4,17 @@
 // // my modules
 mod mods;
 
-use chatgpt::prelude::*;
-use chatgpt::types::{CompletionResponse, Role};
-
-// markdown
-use markdown;
+// new OpneAI
+use futures::StreamExt;
+use rs_openai::chat::Role as ChatGPTRole;
+use rs_openai::chat::{
+    ChatCompletionMessage, ChatCompletionMessageRequestBuilder, CreateChatRequestBuilder,
+};
+use rs_openai::OpenAI;
+use tiktoken_rs::cl100k_base;
 
 use core::panic;
 use std::env;
-use std::time::Duration;
 
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
@@ -25,8 +27,13 @@ use std::io::Write;
 
 use directories::UserDirs;
 
+#[derive(Clone, Debug)]
+struct Message {
+    role: String,
+    content: String,
+}
 // LAZY_STATICを使ってgpt_requestから安全にアクセスできるようにします
-static CHAT_MESSAGES: Lazy<Mutex<Vec<ChatMessage>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static MESSAGES: Lazy<Mutex<Vec<Message>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 const APPNAME: &str = "Talk with RustGPT";
 
@@ -62,7 +69,7 @@ fn memo() -> String {
     };
 
     // Convert the vector to a string and write it to the file
-    let messages = match CHAT_MESSAGES
+    let messages = match MESSAGES
         .lock()
         .map_err(|err| format!("lazy struct data lock error: {}", err))
     {
@@ -74,7 +81,7 @@ fn memo() -> String {
         .iter()
         .map(|message| {
             println!("memo data: {}", message.content);
-            if message.role == Role::User {
+            if message.role == ChatGPTRole::User.to_string() {
                 format!("{:?}: {}", message.role, message.content)
             } else {
                 format!("{:?}: {}\n----------------", message.role, message.content)
@@ -84,7 +91,7 @@ fn memo() -> String {
         .join("\n\n");
 
     let result: String = match file.write_all(data_str.as_bytes()) {
-        Ok(_) => format!("memo is success, data written to file successfully"),
+        Ok(_) => "memo is success, data written to file successfully".to_string(),
         Err(e) => format!("memo is fail, unable to write to file, error: {}", e),
     };
 
@@ -93,81 +100,141 @@ fn memo() -> String {
 }
 
 #[tauri::command]
-async fn gpt_request(b: u8, msg: &str) -> std::result::Result<String, String> {
+async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, String> {
     // 環境変数からAPIキーを取得
     let apikey = match env::var("CHATGPTTOKEN") {
         Ok(val) => val,
         Err(e) => format!("couldn't interpret CHATGPTTOKEN: {}", e).to_string(),
     };
 
-    let mut set_model: ChatGPTEngine = ChatGPTEngine::Custom("gpt-3.5-turbo-1106");
+    // create client with APIKEY
+    let client = OpenAI::new(&OpenAI {
+        api_key: apikey,
+        org_id: None,
+    });
+
+    let mut set_model: &str = "gpt-3.5-turbo-1106";
     if b == 1 {
-        set_model = ChatGPTEngine::Custom("gpt-4-0125-preview");
+        set_model = "gpt-4-0125-preview";
     }
 
-    let client = match ChatGPT::new_with_config(
-        apikey,
-        ModelConfigurationBuilder::default()
-            .timeout(Duration::new(120, 0))
-            .temperature(1.0)
-            .engine(set_model)
-            .build()
-            .unwrap(),
-    ) {
-        Ok(client) => client,
-        Err(e) => return Err(format!("ChatGPT client error: {}", e)),
-    };
-
-    // メッセージヒストリをロックしていますが、エラーが起きた場合はString型のエラーメッセージを返します。
-    let messages = {
-        let mut guard_message = CHAT_MESSAGES
-            .lock()
-            .map_err(|err| format!("lazy struct data lock error: {}", err))?;
-        guard_message.push(ChatMessage {
-            role: Role::User,
+    // メッセージ履歴に保存する
+    // グローバル変数のロックを短くするため、リクエストをはさみ二度アクセスしている
+    let messages: Vec<Message> = {
+        let mut guard_messages: std::sync::MutexGuard<'_, Vec<Message>> = MESSAGES.lock().map_err(
+            |err: std::sync::PoisonError<std::sync::MutexGuard<'_, Vec<Message>>>| {
+                format!("lazy struct data lock error: {}", err)
+            },
+        )?;
+        guard_messages.push(Message {
+            role: ChatGPTRole::User.to_string(),
             content: msg.to_string(),
         });
-        guard_message.clone()
+
+        guard_messages.clone()
     };
 
-    // ChatGPT サーバにリクエストを送信し、結果を待ちますが、エラーがあれば String 型で返します。
-    let res: CompletionResponse = client
-        .send_history(&messages)
-        .await
-        .map_err(|err| format!("ChatGPT client error: {}", err))?;
+    // 履歴を渡すために、ChatCompletionMessageに変換します
+    let pass_vec: Vec<ChatCompletionMessage> = messages
+        .iter()
+        .map(|message| {
+            ChatCompletionMessageRequestBuilder::default()
+                .role(ChatGPTRole::User)
+                .content(message.content.clone())
+                .name(message.role.clone())
+                .build()
+                .unwrap()
+        })
+        .collect();
 
-    // ここにunwrap()を使っている関数の呼び出しを記述
-    mods::voice::say(res.message().content.as_str());
+    // リクエストボディを作成
+    let req = match CreateChatRequestBuilder::default()
+        .model(set_model.to_string())
+        .stream(true)
+        .messages(pass_vec)
+        .build()
+    {
+        Ok(req) => req,
+        Err(e) => return Err(format!("CreateChatRequestBuilder error: {}", e)),
+    };
 
+    // リクエストを送信
+    let mut stream = match client.chat().create_with_stream(&req).await {
+        Ok(stream) => stream,
+        Err(e) => return Err(format!("client.chat().create_with_stream error: {}", e)),
+    };
+
+    let mut result = String::new();
+    let mut delta = String::new();
+    while let Some(response) = stream.next().await {
+        response.unwrap().choices.iter().for_each(|choice| {
+            if let Some(ref content) = choice.delta.content {
+                delta.push_str(content);
+            }
+        });
+
+        // Stop文字を定義し、中途処理を行います
+        if delta.ends_with('.') || delta.ends_with('。') || delta.ends_with('\n') {
+            result.push_str(&delta);
+
+            // メッセージを発言
+            // 棒読みちゃんが起動していない場合は無視します
+            mods::voice::say(delta.as_str());
+            // デルタ文字列を初期化
+            delta = String::new();
+        }
+    }
+
+    // マークダウン整形
     let markdown_content =
-        markdown::to_html_with_options(res.message().content.as_str(), &markdown::Options::gfm())?;
+        match markdown::to_html_with_options(result.as_str(), &markdown::Options::gfm()) {
+            Ok(content) => content,
+            Err(e) => return Err(format!("markdown::to_html_with_options error: {}", e)),
+        };
 
-    // 応答メッセージをヒストリに追加
-    let msg = format!(
-        "{}\n\nModel: {}, Total token: {}",
-        markdown_content, res.model, res.usage.total_tokens
-    );
-
-    match CHAT_MESSAGES
+    // レスポンスをメッセージ履歴に保存し
+    // メッセージ履歴を表示
+    // Streamでは取れないトークン数を計算する
+    let mut tokenize_resource: String = String::new();
+    match MESSAGES
         .lock()
         .map_err(|err| format!("lazy struct data lock error: {}", err))
     {
-        Ok(mut guard_message) => {
-            guard_message.push(res.message().clone());
+        Ok(mut guard_messages) => {
+            let pass_msg = Message {
+                role: ChatGPTRole::Assistant.to_string(),
+                content: result.to_string(),
+            };
+            guard_messages.push(pass_msg);
             // メッセージ履歴を表示
-            for (i, message) in guard_message.iter().enumerate() {
-                println!("{} - {:?}", i, message);
+            for (i, message) in guard_messages.iter().enumerate() {
+                tokenize_resource.push_str(message.content.as_str());
+                // println!(
+                //     "{} - role: {}, content: {}",
+                //     i, message.role, message.content
+                // );
             }
         }
         Err(e) => return Err(format!("lazy struct data lock error: {}", e)),
     }
 
+    // 応答メッセージをヒストリに追加
+    let bpe = cl100k_base().unwrap();
+    let tokens = bpe.encode_with_special_tokens(tokenize_resource.as_str());
+    let msg = format!(
+        "{}\n\nModel: {}, Total token: {}",
+        markdown_content,
+        req.model,
+        tokens.len(),
+    );
+
+    // マークダウン整形済みのメッセージを返します
     Ok(msg)
 }
 
 #[tauri::command]
 fn gpt_reset_messages() {
-    match CHAT_MESSAGES
+    match MESSAGES
         .lock()
         .map_err(|err| format!("lazy struct data lock error: {}", err))
     {
@@ -182,19 +249,18 @@ fn gpt_reset_messages() {
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
-            gpt_request,
+            gpt_stream_request,
             gpt_reset_messages,
             memo
         ])
-        .on_window_event(move |event| match event.event() {
-            // ウィンドウイベントを監視
-            // ウィンドウ終了時に履歴をメモします
-            tauri::WindowEvent::Destroyed => {
+        .on_window_event(move |event| {
+            if let tauri::WindowEvent::Destroyed = event.event() {
+                // ウィンドウイベントを監視
+                // ウィンドウ終了時に履歴をメモします
                 println!("Window destroyed");
                 memo();
                 let _ = event.window().close();
             }
-            _ => (),
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
