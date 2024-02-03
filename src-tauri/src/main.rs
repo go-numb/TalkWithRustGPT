@@ -113,7 +113,7 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
         org_id: None,
     });
 
-    let mut set_model: &str = "gpt-3.5-turbo-1106";
+    let mut set_model: &str = "gpt-3.5-turbo-0125";
     if b == 1 {
         set_model = "gpt-4-0125-preview";
     }
