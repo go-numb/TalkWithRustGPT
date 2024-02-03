@@ -4,6 +4,9 @@
 // // my modules
 mod mods;
 
+// Logger
+use log::{error, info};
+
 // new OpneAI
 use futures::StreamExt;
 use rs_openai::chat::Role as ChatGPTRole;
@@ -59,7 +62,7 @@ fn memo() -> String {
 
     let path = save_dir.join(filename.as_str());
 
-    println!("save to dir: {:?}", path.to_str());
+    info!("save to dir: {:?}", path.to_str());
 
     let mut file = match File::create(path) {
         Ok(file) => file,
@@ -80,7 +83,7 @@ fn memo() -> String {
     let data_str: String = messages
         .iter()
         .map(|message| {
-            println!("memo data: {}", message.content);
+            info!("memo data: {}", message.content);
             if message.role == ChatGPTRole::User.to_string() {
                 format!("{:?}: {}", message.role, message.content)
             } else {
@@ -95,7 +98,7 @@ fn memo() -> String {
         Err(e) => format!("memo is fail, unable to write to file, error: {}", e),
     };
 
-    println!("{}", result.as_str());
+    info!("{}", result.as_str());
     result
 }
 
@@ -172,27 +175,44 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
     let voice_id: i16 = match env::var("VOICEID") {
         Ok(val) => {
             is_voice = true;
+            info!("VOICEID: {}", val);
             val.parse().unwrap()
         }
         Err(e) => {
-            println!("couldn't interpret VOICEID: {}", e);
+            info!("couldn't interpret VOICEID: {}", e);
             is_voice = false;
             1
         }
     };
 
-
     let mut result = String::new();
     let mut delta = String::new();
-    while let Some(response) = stream.next().await {
-        response.unwrap().choices.iter().for_each(|choice| {
+    let mut reason = String::new();
+    while let Some(res) = stream.next().await {
+        let response = match res {
+            Ok(response) => response,
+            Err(e) => {
+                return Err(format!("stream.next().await error: {}", e));
+            }
+        };
+
+        response.choices.iter().for_each(|choice| {
             if let Some(ref content) = choice.delta.content {
                 delta.push_str(content);
             }
+            // 終了理由を取得する
+            reason = match &choice.finish_reason {
+                Some(reason) => reason.clone(),
+                None => String::new(),
+            };
         });
 
         // Stop文字を定義し、中途処理を行います
-        if delta.ends_with('.') || delta.ends_with('。') || delta.ends_with('\n') {
+        if delta.ends_with('.')
+            || delta.ends_with('。')
+            || delta.ends_with('\n')
+            || !reason.is_empty()
+        {
             result.push_str(&delta);
             // メッセージを発言
             // 棒読みちゃんが起動していない場合は無視します
@@ -200,9 +220,12 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
                 match mods::voice::say(voice_id, delta.as_str()) {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("棒読みちゃんが起動していないか、エラーが発生しました: {}", e);
+                        info!(
+                            "棒読みちゃんが起動していないか、エラーが発生しました: {}",
+                            e
+                        );
                         is_voice = false;
-                    },
+                    }
                 };
             }
             // デルタ文字列を初期化
@@ -264,12 +287,14 @@ fn gpt_reset_messages() {
         Ok(mut guard_message) => {
             guard_message.clear();
         }
-        Err(e) => println!("lazy struct data lock error: {}", e),
+        Err(e) => error!("lazy struct data lock error: {}", e),
     }
-    println!("gpt_reset_messages is success");
+    info!("gpt_reset_messages is success");
 }
 
 fn main() {
+    env_logger::init();
+
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             gpt_stream_request,
@@ -280,7 +305,7 @@ fn main() {
             if let tauri::WindowEvent::Destroyed = event.event() {
                 // ウィンドウイベントを監視
                 // ウィンドウ終了時に履歴をメモします
-                println!("Window destroyed");
+                info!("Window destroyed");
                 memo();
                 let _ = event.window().close();
             }
