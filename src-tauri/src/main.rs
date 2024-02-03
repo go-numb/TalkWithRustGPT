@@ -167,6 +167,21 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
         Err(e) => return Err(format!("client.chat().create_with_stream error: {}", e)),
     };
 
+    // VoiceIDの指定を読み込み
+    let mut is_voice: bool;
+    let voice_id: i16 = match env::var("VOICEID") {
+        Ok(val) => {
+            is_voice = true;
+            val.parse().unwrap()
+        }
+        Err(e) => {
+            println!("couldn't interpret VOICEID: {}", e);
+            is_voice = false;
+            1
+        }
+    };
+
+
     let mut result = String::new();
     let mut delta = String::new();
     while let Some(response) = stream.next().await {
@@ -179,10 +194,17 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
         // Stop文字を定義し、中途処理を行います
         if delta.ends_with('.') || delta.ends_with('。') || delta.ends_with('\n') {
             result.push_str(&delta);
-
             // メッセージを発言
             // 棒読みちゃんが起動していない場合は無視します
-            mods::voice::say(delta.as_str());
+            if is_voice {
+                match mods::voice::say(voice_id, delta.as_str()) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("棒読みちゃんが起動していないか、エラーが発生しました: {}", e);
+                        is_voice = false;
+                    },
+                };
+            }
             // デルタ文字列を初期化
             delta = String::new();
         }
