@@ -83,7 +83,7 @@ function App() {
     }
     setStatus(StatusThinking);
 
-    invoke("gpt_request", { b: model, msg: _msg })
+    invoke("gpt_stream_request", { b: model, msg: _msg })
       .then((res) => {
         setResult(`${res}`);
       })
