@@ -8,14 +8,14 @@ import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognitio
 
 
 function App() {
-    const StatusNone = ""
-    const StatusListen = "🎧 Listening..."
-    const StatusStop = "🎧 Stoped listening."
-    const StatusStart = "🎧 Start listening."
-    const StatusThinking = "🤖 Thinking..."
-    const StatusModel3_5 = "🤖 Switch to model 3.5."
-    const StatusModel4_0 = "🤖 Switch to model 4.0."
-    const StatusResetMessages = "📝 Done! reset message history."
+  const StatusNone = ""
+  const StatusListen = "🎧 Listening..."
+  const StatusStop = "🎧 Stoped listening."
+  const StatusStart = "🎧 Start listening."
+  const StatusThinking = "🤖 Thinking..."
+  const StatusModel3_5 = "🤖 Switch to model 3.5."
+  const StatusModel4_0 = "🤖 Switch to model 4.0."
+  const StatusResetMessages = "📝 Done! reset message history."
 
   const {
     transcript,
@@ -59,24 +59,35 @@ function App() {
 
   useEffect(() => { // 音声認識が開始されたら、入力フォームにフォーカス
     if (listening) {
-      console.log(`listening: ${listening}, `, transcript);
+      console.debug(`listening: ${listening}, `, transcript);
       setMsg(transcript);
       setStatus(StatusListen);
 
-      if (is_command_enter(transcript)) {
-        console.log("command enter");
+      let [is_there, command] = is_command_enter(transcript);
+      if (is_there) {
+        console.debug("command enter");
         resetTranscript();
-        gpt_request();
+        console.debug("msg: " + msg);
+
+        let reqest = msg.replace(command, "");
+        console.debug("req: " + reqest);
+        setMsg(reqest);
+        gpt_request(reqest);
       }
     }
   }, [transcript]);
 
   // gpt_request Rust Tauri APIを呼び出す
-  function gpt_request() {
+  function gpt_request(req: string) {
     // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-    const _msg = msg;
-    console.log(_msg);
-    
+    let _msg = msg;
+    if (req != "") {
+      console.debug("req: ", req);
+
+      _msg = req;
+    }
+    console.debug(_msg);
+
     if (_msg === "") {
       setResult("Please enter a msg.");
       return;
@@ -88,6 +99,8 @@ function App() {
         setResult(`${res}`);
       })
       .catch((err) => {
+        console.error(`gpt_stream_request > ${err}`);
+
         setStatus(`error: ${err}`);
       })
       .finally(() => {
@@ -112,6 +125,7 @@ function App() {
         setResult(`${message}`);
       })
       .catch((err) => {
+        console.error(`memo > ${err}`);
         setResult(err);
       });
   };
@@ -132,15 +146,17 @@ function App() {
     setMsg("");
   }
 
-  function is_command_enter(str: string): Boolean {
-    const _msg = str;
-    if (_msg.endsWith("エンター") || _msg.endsWith("エンター。") || _msg.endsWith("エンター！")) {
-      _msg.replace("エンター", "");
-      setMsg(_msg);
-      return true;
+  function is_command_enter(str: string): [Boolean, string] {
+    let _msg = str;
+    if (_msg.endsWith("エンター。")) {
+      return [true, "エンター"];
+    } else if (_msg.endsWith("送信。")) {
+      return [true, "送信"];
+    } else if (_msg.endsWith("教えて。")) {
+      return [true, "教えて"];
     }
 
-    return false;
+    return [false, ""];
   }
 
 
@@ -152,7 +168,7 @@ function App() {
         <img onClick={gpt_reset_messages} src="/delete.png" className="logo reset message" alt="reset message logo" title="reset messages" />
         <img onClick={switch_model} src="/switch.png" className="logo switch model" alt="switch model logo" title="switch set model" />
         <img onClick={speech} src="/vc.png" className="logo vc" alt="vc logo" title="start/end vc for message" />
-      </div> 
+      </div>
 
       <div style={{ textAlign: "left" }}>
         <div dangerouslySetInnerHTML={{ __html: query }} />
@@ -165,7 +181,7 @@ function App() {
         className="row"
         onSubmit={(e) => {
           e.preventDefault();
-          gpt_request();
+          gpt_request("");
         }}
       >
         <textarea
