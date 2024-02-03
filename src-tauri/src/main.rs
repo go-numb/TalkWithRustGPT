@@ -101,6 +101,9 @@ fn memo() -> String {
 
 #[tauri::command]
 async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, String> {
+    // タイムスタンプを取得
+    let start = Local::now();
+
     // 環境変数からAPIキーを取得
     let apikey = match env::var("CHATGPTTOKEN") {
         Ok(val) => val,
@@ -215,13 +218,15 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
     }
 
     // 応答メッセージをヒストリに追加
+    let end = Local::now();
     let bpe = cl100k_base().unwrap();
     let tokens = bpe.encode_with_special_tokens(tokenize_resource.as_str());
     let msg = format!(
-        "{}\n\nModel: {}, Total token: {}",
+        "{}\n\nModel: {}, Total token: {}, Elaps: {}s",
         markdown_content,
         req.model,
         tokens.len(),
+        end.signed_duration_since(start).num_seconds(),
     );
 
     // マークダウン整形済みのメッセージを返します
