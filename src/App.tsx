@@ -67,10 +67,7 @@ function App() {
       if (is_there) {
         console.debug("command enter");
         resetTranscript();
-        console.debug("msg: " + msg);
-
         let reqest = msg.replace(command, "");
-        console.debug("req: " + reqest);
         setMsg(reqest);
         gpt_request(reqest);
       }
@@ -153,7 +150,7 @@ function App() {
     } else if (_msg.endsWith("送信。")) {
       return [true, "送信"];
     } else if (_msg.endsWith("教えて。")) {
-      return [true, "教えて"];
+      return [true, ""];
     }
 
     return [false, ""];
