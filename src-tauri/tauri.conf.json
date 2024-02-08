@@ -43,7 +43,7 @@
         "resizable": true,
         "title": "Talk With Rust GPT",
         "width": 600,
-        "height": 1020
+        "height": 980
       }
     ]
   }
