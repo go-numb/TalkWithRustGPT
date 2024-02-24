@@ -292,6 +292,34 @@ fn gpt_reset_messages() {
     info!("gpt_reset_messages is success");
 }
 
+#[tauri::command]
+fn request_system(num: u8) -> std::result::Result<String, String> {
+    let order: String = mods::prompts::choose(num);
+
+    // メッセージ履歴にrole: systemを差し込む
+    match MESSAGES
+        .lock()
+        .map_err(|err| format!("lazy struct data lock error: {}", err))
+    {
+        Ok(mut guard_messages) => {
+            match order.as_str() {
+                // normalまたはunknownのメッセージを削除します
+                "normal"  => {
+                    guard_messages.retain(|message| message.content != "unknown");
+                }
+                _ => {
+                    guard_messages.push(Message {
+                        role: ChatGPTRole::System.to_string(),
+                        content: order.clone(),
+                    });
+                }
+            }
+            Ok(format!("system message: {}", order))
+        }
+        Err(e) => Err(format!("lazy struct data lock error: {}", e)),
+    }
+}
+
 fn main() {
     env_logger::init();
 
@@ -299,6 +327,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             gpt_stream_request,
             gpt_reset_messages,
+            request_system,
             memo
         ])
         .on_window_event(move |event| {
