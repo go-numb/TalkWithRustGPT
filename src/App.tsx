@@ -8,6 +8,9 @@ import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognitio
 
 
 function App() {
+  const StatusNotSupport = "❌ Browser doesn't support speech recognition."
+  const StatusAvailable = "❌ Microphone function is off, access to microphone is required."
+
   const StatusNone = ""
   const StatusListen = "🎧 Listening..."
   const StatusStop = "🎧 Stoped listening."
@@ -22,6 +25,7 @@ function App() {
     listening,
     resetTranscript,
     browserSupportsSpeechRecognition,
+    isMicrophoneAvailable,
   } = useSpeechRecognition();
   const [msg, setMsg] = useState("");
   const [query, setQuery] = useState("");
@@ -37,8 +41,15 @@ function App() {
   }, [query]);
 
   if (!browserSupportsSpeechRecognition) {
-    return <span>Browser doesn't support speech recognition.</span>;
+    setStatus(StatusNotSupport);
+    return <span>{StatusNotSupport}</span>;
   }
+
+  if (!isMicrophoneAvailable) {
+    setStatus(StatusAvailable);
+    return <span>{StatusAvailable}</span>;
+  }
+
   const speech = () => {
     if (!listening) {
       SpeechRecognition.startListening({
