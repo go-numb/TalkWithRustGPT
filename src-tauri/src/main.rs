@@ -4,6 +4,11 @@
 // // my modules
 mod mods;
 
+use dotenv::dotenv;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
 // Logger
 use log::{error, info};
 
@@ -30,10 +35,17 @@ use std::io::Write;
 
 use directories::UserDirs;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Message {
     role: String,
     content: String,
+}
+#[derive(Serialize, Deserialize)]
+struct RequestBody {
+    model: String,
+    system: String,
+    max_tokens: u32,
+    messages: Vec<Message>,
 }
 // LAZY_STATICを使ってgpt_requestから安全にアクセスできるようにします
 static MESSAGES: Lazy<Mutex<Vec<Message>>> = Lazy::new(|| Mutex::new(Vec::new()));
@@ -100,6 +112,171 @@ fn memo() -> String {
 
     info!("{}", result.as_str());
     result
+}
+
+#[tauri::command]
+async fn claude_request(b: u8, msg: &str) -> std::result::Result<Message, String> {
+    // タイムスタンプを取得
+    let start = Local::now();
+
+    // 環境変数からAPIキーを取得
+    let api_key = env::var("ANTHROPIC_API_KEY").expect("Expected an API key");
+
+    let mut set_model: &str = "claude-3-sonnet-20240229";
+    if b == 1 {
+        set_model = "claude-3-opus-20240229";
+    }
+
+    let (messages, system_message_content) = {
+        let mut guard_messages = MESSAGES
+            .lock()
+            .map_err(|err| format!("lazy struct data lock error: {}", err))?;
+
+        guard_messages.push(Message {
+            role: ChatGPTRole::User.to_string(),
+            content: msg.to_string(),
+        });
+
+        let (filtered_messages, system_messages): (Vec<Message>, Vec<Message>) = guard_messages
+            .iter()
+            .cloned()
+            .partition(|message| message.role != "system");
+
+        let system_message_content = system_messages
+            .first()
+            .map(|message| message.content.clone())
+            .unwrap_or_else(String::new);
+
+        (filtered_messages, system_message_content)
+    };
+
+    // クライアントを作成
+    let messages_vec: Vec<Message> = messages.to_vec();
+    let client = Client::new();
+    let body = RequestBody {
+        model: set_model.to_string(),
+        system: system_message_content,
+        max_tokens: 4096,
+        // messages をvecに変換して渡す
+        messages: messages_vec,
+    };
+
+    // リクエストを送信
+    let res = match client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(err) => {
+            println!("Error: {}", err);
+            return Err(format!("Request error: {}", err));
+        }
+    };
+
+    // レスポンスボディをテキストとして表示（必要に応じて）
+    let res_json: Value = match res.json().await {
+        Ok(res) => res,
+        Err(err) => {
+            print!("{}", err);
+            Value::Null
+        }
+    };
+
+    // // `content[0].text`にアクセス
+    // print!("{:}", res_json);
+
+    let result =
+        if let Some(first_content) = res_json["content"].as_array().and_then(|arr| arr.first()) {
+            if let Some(text_value) = first_content["text"].as_str() {
+                // println!("content[0].textの値: {}", text_value);
+                text_value.to_string()
+            } else {
+                println!("`text`キーの型がstringではありません。");
+                String::new()
+            }
+        } else {
+            println!("`content`配列が空、または`content`キーが存在しません。");
+            String::new()
+        };
+
+    // VoiceIDの指定を読み込み
+    let is_voice: bool;
+    let voice_id: i16 = match env::var("VOICEID") {
+        Ok(val) => {
+            is_voice = true;
+            info!("VOICEID: {}", val);
+            val.parse().unwrap()
+        }
+        Err(e) => {
+            info!("couldn't interpret VOICEID: {}", e);
+            is_voice = false;
+            1
+        }
+    };
+    // メッセージを発言
+    // 棒読みちゃんが起動していない場合は無視します
+    if is_voice {
+        match mods::voice::say(voice_id, result.as_str()) {
+            Ok(_) => {}
+            Err(e) => {
+                info!(
+                    "棒読みちゃんが起動していないか、エラーが発生しました: {}",
+                    e
+                );
+                // is_voice = false;
+            }
+        };
+    }
+
+    // マークダウン整形
+    let markdown_content =
+        match markdown::to_html_with_options(result.as_str(), &markdown::Options::gfm()) {
+            Ok(content) => content,
+            Err(e) => return Err(format!("markdown::to_html_with_options error: {}", e)),
+        };
+
+    let mut tokenize_resource: String = String::new();
+    match MESSAGES
+        .lock()
+        .map_err(|err| format!("lazy struct data lock error: {}", err))
+    {
+        Ok(mut guard_messages) => {
+            let pass_msg = Message {
+                role: ChatGPTRole::Assistant.to_string(),
+                content: markdown_content.to_string(),
+            };
+            guard_messages.push(pass_msg);
+            // メッセージ履歴を表示
+            for message in guard_messages.iter() {
+                tokenize_resource.push_str(message.content.as_str());
+            }
+        }
+        Err(e) => return Err(format!("lazy struct data lock error: {}", e)),
+    }
+
+    // 応答メッセージをヒストリに追加
+    let end = Local::now();
+    let bpe = cl100k_base().unwrap();
+    let tokens = bpe.encode_with_special_tokens(tokenize_resource.as_str());
+    let msg = format!(
+        "{}\n\nModel: {}, Total token: {}, Elaps: {}s",
+        markdown_content,
+        set_model,
+        tokens.len(),
+        end.signed_duration_since(start).num_seconds(),
+    );
+
+    let pass_msg = Message {
+        role: ChatGPTRole::Assistant.to_string(),
+        content: msg.to_string(),
+    };
+
+    Ok(pass_msg)
 }
 
 #[tauri::command]
@@ -279,7 +456,7 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
 }
 
 #[tauri::command]
-fn gpt_reset_messages() {
+fn reset_messages() {
     match MESSAGES
         .lock()
         .map_err(|err| format!("lazy struct data lock error: {}", err))
@@ -289,7 +466,7 @@ fn gpt_reset_messages() {
         }
         Err(e) => error!("lazy struct data lock error: {}", e),
     }
-    info!("gpt_reset_messages is success");
+    info!("reset_messages is success");
 }
 
 #[tauri::command]
@@ -304,7 +481,7 @@ fn request_system(num: u8) -> std::result::Result<String, String> {
         Ok(mut guard_messages) => {
             match order.as_str() {
                 // normalまたはunknownのメッセージを削除します
-                "normal"  => {
+                "normal" => {
                     guard_messages.retain(|message| message.content != "unknown");
                 }
                 _ => {
@@ -321,13 +498,15 @@ fn request_system(num: u8) -> std::result::Result<String, String> {
 }
 
 fn main() {
+    dotenv().ok();
     env_logger::init();
 
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             gpt_stream_request,
-            gpt_reset_messages,
+            reset_messages,
             request_system,
+            claude_request,
             memo
         ])
         .on_window_event(move |event| {

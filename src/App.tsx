@@ -16,8 +16,10 @@ function App() {
   const StatusStop = "🎧 Stoped listening."
   const StatusStart = "🎧 Start listening."
   const StatusThinking = "🤖 Thinking..."
-  const StatusModel3_5 = "🤖 Switch to model 3.5."
-  const StatusModel4_0 = "🤖 Switch to model 4.0."
+  const StatusModelLow = "🤖 Switch to model 3.5/sonnet."
+  const StatusModelHigh = "🤖 Switch to model 4.0/opus."
+  const StatusAIChatGPT = "🤖 Switch to ChatGPT."
+  const StatusAIClaude = "🤖 Switch to Claude."
   const StatusResetMessages = "📝 Done! reset message history."
 
   const {
@@ -31,6 +33,7 @@ function App() {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState("");
   const [model, setModel] = useState(Number);
+  const [AI, setAI] = useState(Number);
   const [status, setStatus] = useState("");
 
   // useEffect 変数監視セクション
@@ -80,14 +83,57 @@ function App() {
         resetTranscript();
         let reqest = msg.replace(command, "");
         setMsg(reqest);
-        gpt_request(reqest);
+        switch_request(reqest);
       }
     }
   }, [transcript]);
 
+
+  const switch_request = async (req: string) => {
+    if (AI == 0) {
+      gpt_request(req)
+    } else {
+      claude_request(req)
+    }
+  }
+
+  const claude_request = async (req: string) => {
+    let _msg = msg;
+    if (req != "") {
+      console.debug("req: ", req);
+
+      _msg = req;
+    }
+    console.debug(_msg);
+
+    if (_msg === "") {
+      setResult("Please enter a msg.");
+      return;
+    }
+    setStatus(StatusThinking);
+
+    invoke("claude_request", { b: model, msg: _msg })
+      .then((res: any) => { // Add type annotation to 'res'
+        console.log(res);
+
+        setResult(`${res.content}`);
+      })
+      .catch((err) => {
+        console.error(`claude_request > ${err}`);
+
+        setStatus(`error: ${err}`);
+      })
+      .finally(() => {
+        reset_all_vers();
+        setQuery(`<h2 class="line_wrap">Q: ${_msg}</h2>\n`);
+        if (!listening) {
+          setStatus(StatusNone);
+        }
+      });
+  }
+
   // gpt_request Rust Tauri APIを呼び出す
   function gpt_request(req: string) {
-    // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
     let _msg = msg;
     if (req != "") {
       console.debug("req: ", req);
@@ -120,9 +166,9 @@ function App() {
       });
   };
 
-  function gpt_reset_messages() {
+  function reset_messages() {
     memo();
-    invoke("gpt_reset_messages");
+    invoke("reset_messages");
     setStatus(StatusResetMessages);
   };
 
@@ -141,10 +187,20 @@ function App() {
   function switch_model() {
     if (model != 0) {
       setModel(0);
-      setStatus(StatusModel3_5);
+      setStatus(StatusModelLow);
     } else {
       setModel(1);
-      setStatus(StatusModel4_0);
+      setStatus(StatusModelHigh);
+    }
+  }
+
+  function switch_ai() {
+    if (AI != 0) {
+      setAI(0);
+      setStatus(StatusAIChatGPT);
+    } else {
+      setAI(1);
+      setStatus(StatusAIClaude);
     }
   }
 
@@ -182,6 +238,7 @@ function App() {
   }
 
 
+
   return (
     <div className="container">
       <div className="row" style={{
@@ -205,8 +262,9 @@ function App() {
       </div>
 
       <div className="row">
-        <img onClick={gpt_reset_messages} src="/delete.png" className="logo reset message" alt="reset message logo" title="reset messages" />
-        <img onClick={switch_model} src="/switch.png" className="logo switch model" alt="switch model logo" title="switch set model" />
+        <img onClick={reset_messages} src="/delete.png" className="logo reset message" alt="reset message logo" title="reset messages" />
+        <img onClick={switch_model} src="/switch-model.png" className="logo switch model" alt="switch model logo" title="switch set model" />
+        <img onClick={switch_ai} src={AI === 0 ? "/chatgpt-ai.png" : "/claude-ai.png"} className="logo switch ai" alt="switch ai logo" title="switch set ai" />
         <img onClick={speech} src="/vc.png" className="logo vc" alt="vc logo" title="start/end vc for message" />
       </div>
 
@@ -221,7 +279,7 @@ function App() {
         className="row"
         onSubmit={(e) => {
           e.preventDefault();
-          gpt_request("");
+          switch_request("");
         }}
       >
         <textarea
