@@ -5,16 +5,22 @@ Switch API & Models:
 API: OpenAI ChatGPT
 API: Anthropic Claude
 
+[Release](https://github.com/go-numb/TalkWithRustGPT/releases)  
+
 ![TalkWithRustGPT](https://github.com/go-numb/TalkWithRustGPT/blob/images/public/talkwithgpt.png)
 
 ## Future
-- Switch ChatGPT model
-- Input Voice
-- Save Conversation history to UserDir
+- [x] switch_request(gpt_request, claude_request)
+- [x] switch model
+- [x] reset_messages -> memo, window close -> memo.
+- [x] input voice, output voice
+- [x] voice commands ["教えて", "送信", "エンター"]
 
 ## Required
-set env CHATGPTTOKEN
-set env ANTHROPIC_API_KEY
+set env CHATGPTTOKEN  
+set env ANTHROPIC_API_KEY  
+// If you specify the voice_id of the 棒読みちゃん, she will speak.
+set env VOICEID
 
 ## Usage
 ```rust
@@ -33,10 +39,6 @@ $ npm tauri dev
 $ npm tauri build
 ```
 
-## tauri::commands for ivoke
-- [x] gpt_request
-- [x] reset_messages
-- [x] memo
 
 
 ## via golang client
