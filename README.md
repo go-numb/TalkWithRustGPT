@@ -1,6 +1,9 @@
 # Talk with RustGPT
 GUI: Tauri + React + Typescript
+
+Switch API & Models:  
 API: OpenAI ChatGPT
+API: Anthropic Claude
 
 ![TalkWithRustGPT](https://github.com/go-numb/TalkWithRustGPT/blob/images/public/talkwithgpt.png)
 
@@ -11,6 +14,7 @@ API: OpenAI ChatGPT
 
 ## Required
 set env CHATGPTTOKEN
+set env ANTHROPIC_API_KEY
 
 ## Usage
 ```rust
