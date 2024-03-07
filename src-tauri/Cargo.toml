@@ -1,8 +1,8 @@
 [package]
 name = "talk-with-rust-gpt"
-version = "0.0.5"
+version = "0.0.6"
 description = "Talk With Rust GPT"
-authors = ["you"]
+authors = ["_numbP"]
 licence = "MIT OR Apache-2.0"
 repository = "https://github.com/go-numb/TalkWithRustGPT"
 edition = "2021"
