@@ -43,7 +43,7 @@ struct Message {
 #[derive(Serialize, Deserialize)]
 struct RequestBody {
     model: String,
-    system: String,
+    system: Option<String>,
     max_tokens: u32,
     messages: Vec<Message>,
 }
@@ -150,15 +150,17 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<Message, String
         (filtered_messages, system_message_content)
     };
 
+
+    // println!("system: {:?}", system_message_content);
+    // println!("messages: {:?}", messages);
+
     // クライアントを作成
-    let messages_vec: Vec<Message> = messages.to_vec();
     let client = Client::new();
     let body = RequestBody {
         model: set_model.to_string(),
-        system: system_message_content,
+        system: Some(system_message_content),
         max_tokens: 4096,
-        // messages をvecに変換して渡す
-        messages: messages_vec,
+        messages,
     };
 
     // リクエストを送信
@@ -197,11 +199,11 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<Message, String
                 text_value.to_string()
             } else {
                 println!("`text`キーの型がstringではありません。");
-                String::new()
+                return Err(format!("`text`キーの型がstringではありません。res: {}", res_json));
             }
         } else {
-            println!("`content`配列が空、または`content`キーが存在しません。");
-            String::new()
+            println!("`content`配列が空、または`content`キーが存在しません。res: {}", res_json);
+            return Err(format!("`content`配列が空、または`content`キーが存在しません。res: {}", res_json));
         };
 
     // VoiceIDの指定を読み込み
