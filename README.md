@@ -19,7 +19,7 @@ API: Anthropic Claude
 ## Required
 set env CHATGPTTOKEN  
 set env ANTHROPIC_API_KEY  
-// If you specify the voice_id of the 棒読みちゃん, she will speak.
+// If you specify the voice_id of the 棒読みちゃん, she will speak.  
 set env VOICEID
 
 ## Usage

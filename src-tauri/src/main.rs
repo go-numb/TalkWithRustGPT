@@ -235,6 +235,9 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<Message, String
         };
     }
 
+    println!("result: {}", result);
+
+
     // マークダウン整形
     let markdown_content =
         match markdown::to_html_with_options(result.as_str(), &markdown::Options::gfm()) {
@@ -250,7 +253,7 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<Message, String
         Ok(mut guard_messages) => {
             let pass_msg = Message {
                 role: ChatGPTRole::Assistant.to_string(),
-                content: markdown_content.to_string(),
+                content: result.to_string(),
             };
             guard_messages.push(pass_msg);
             // メッセージ履歴を表示
@@ -260,6 +263,8 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<Message, String
         }
         Err(e) => return Err(format!("lazy struct data lock error: {}", e)),
     }
+
+    println!("markdown_content: {}", markdown_content);
 
     // 応答メッセージをヒストリに追加
     let end = Local::now();
