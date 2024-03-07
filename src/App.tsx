@@ -167,10 +167,42 @@ function App() {
     return [false, ""];
   }
 
+  function request_system(num: number) {
+    return () => {
+      invoke("request_system", { num: num })
+        .then((res) => {
+          setStatus(`${res}`);
+        })
+        .catch((err) => {
+          console.error(`request_system > ${err}`);
+
+          setStatus(`error: ${err}`);
+        });
+    }
+  }
+
 
   return (
     <div className="container">
-      <h1>Welcome to TalkWithGPT!</h1>
+      <div className="row" style={{
+        marginBottom: "1rem",
+      }}>
+        <div style={{
+          position: "absolute",
+          top: "1rem",
+          textAlign: "center",
+          display: "flex",
+          justifyContent: "space-between",
+          width: "100%",
+        }}>
+          {/* 各ButtonとButtonの間隔を等間隔にし、かつ、最大幅で設置する */}
+          <button style={{ flexGrow: 0 }} onClick={request_system(1)} title="厳格で正確な">&#x1f9d0;</button>
+          <button style={{ flexGrow: 0 }} onClick={request_system(2)} title="フレンドリーな">&#x1fae0;</button>
+          <button style={{ flexGrow: 0 }} onClick={request_system(3)} title="肯定的な">&#x1f973;</button>
+          <button style={{ flexGrow: 0 }} onClick={request_system(4)} title="批判的な">&#x1f608;</button>
+          <button style={{ flexGrow: 0 }} onClick={request_system(0)} title="無指示">&#x1fae5;</button>
+        </div>
+      </div>
 
       <div className="row">
         <img onClick={gpt_reset_messages} src="/delete.png" className="logo reset message" alt="reset message logo" title="reset messages" />
