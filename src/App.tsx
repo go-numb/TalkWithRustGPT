@@ -36,7 +36,17 @@ function App() {
   const [AI, setAI] = useState(Number);
   const [status, setStatus] = useState("");
 
-
+  // 起動時に、環境変数: CHATGPTTOKEN、ANTHROPIC_API_KEYどちらもなければ、setResultにエラーメッセージを表示する
+  const init_check = async () => {
+    const isEnvAvailable = await invoke("is_there_env");
+    if (isEnvAvailable !== true) {    
+      setResult(`[ALERT]ご利用できません: 各AIサービスを利用するための環境変数: CHATGPTTOKENまたは ANTHROPIC_API_KEYを設定してください。`);
+    }
+  };
+  useEffect(() => {
+    // ReferenceError: process is not defined
+    init_check();
+  }, []);
 
   // useEffect 変数監視セクション
   useEffect(() => { // Resultが更新され、Queryが刷新されたら、入力フォームにフォーカス

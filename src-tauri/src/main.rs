@@ -505,6 +505,13 @@ fn request_system(num: u8) -> std::result::Result<String, String> {
     }
 }
 
+#[tauri::command]
+fn is_there_env() -> bool {
+    let chatgpt = env::var("CHATGPTTOKEN");
+    let anth = env::var("ANTHROPIC_API_KEY");
+    // 上記環境変数一方が存在すればTrue, どちらもなければFalse
+    chatgpt.is_ok() || anth.is_ok()
+}
 
 fn main() {
     dotenv().ok();
@@ -512,6 +519,7 @@ fn main() {
 
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            is_there_env,
             gpt_stream_request,
             reset_messages,
             request_system,
