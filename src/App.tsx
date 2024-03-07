@@ -36,6 +36,8 @@ function App() {
   const [AI, setAI] = useState(Number);
   const [status, setStatus] = useState("");
 
+
+
   // useEffect 変数監視セクション
   useEffect(() => { // Resultが更新され、Queryが刷新されたら、入力フォームにフォーカス
     // 入力フォームにフォーカス
@@ -116,7 +118,7 @@ function App() {
       .then((res: any) => { // Add type annotation to 'res'
         console.log(res);
 
-        setResult(`${res.content}`);
+        setResult(`${res}`);
       })
       .catch((err) => {
         console.error(`claude_request > ${err}`);

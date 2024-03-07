@@ -115,7 +115,7 @@ fn memo() -> String {
 }
 
 #[tauri::command]
-async fn claude_request(b: u8, msg: &str) -> std::result::Result<Message, String> {
+async fn claude_request(b: u8, msg: &str) -> std::result::Result<String, String> {
     // タイムスタンプを取得
     let start = Local::now();
 
@@ -149,7 +149,6 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<Message, String
 
         (filtered_messages, system_message_content)
     };
-
 
     // println!("system: {:?}", system_message_content);
     // println!("messages: {:?}", messages);
@@ -199,11 +198,20 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<Message, String
                 text_value.to_string()
             } else {
                 println!("`text`キーの型がstringではありません。");
-                return Err(format!("`text`キーの型がstringではありません。res: {}", res_json));
+                return Err(format!(
+                    "`text`キーの型がstringではありません。res: {}",
+                    res_json
+                ));
             }
         } else {
-            println!("`content`配列が空、または`content`キーが存在しません。res: {}", res_json);
-            return Err(format!("`content`配列が空、または`content`キーが存在しません。res: {}", res_json));
+            println!(
+                "`content`配列が空、または`content`キーが存在しません。res: {}",
+                res_json
+            );
+            return Err(format!(
+                "`content`配列が空、または`content`キーが存在しません。res: {}",
+                res_json
+            ));
         };
 
     // VoiceIDの指定を読み込み
@@ -235,55 +243,32 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<Message, String
         };
     }
 
-    println!("result: {}", result);
-
+    // println!("result: {}", result);
 
     // マークダウン整形
-    let markdown_content =
-        match markdown::to_html_with_options(result.as_str(), &markdown::Options::gfm()) {
-            Ok(content) => content,
-            Err(e) => return Err(format!("markdown::to_html_with_options error: {}", e)),
-        };
+    let markdown_content = convert_markdown_to_html(result.as_str())?;
 
-    let mut tokenize_resource: String = String::new();
-    match MESSAGES
-        .lock()
-        .map_err(|err| format!("lazy struct data lock error: {}", err))
-    {
-        Ok(mut guard_messages) => {
-            let pass_msg = Message {
-                role: ChatGPTRole::Assistant.to_string(),
-                content: result.to_string(),
-            };
-            guard_messages.push(pass_msg);
-            // メッセージ履歴を表示
-            for message in guard_messages.iter() {
-                tokenize_resource.push_str(message.content.as_str());
-            }
-        }
-        Err(e) => return Err(format!("lazy struct data lock error: {}", e)),
-    }
-
-    println!("markdown_content: {}", markdown_content);
-
-    // 応答メッセージをヒストリに追加
-    let end = Local::now();
-    let bpe = cl100k_base().unwrap();
-    let tokens = bpe.encode_with_special_tokens(tokenize_resource.as_str());
-    let msg = format!(
-        "{}\n\nModel: {}, Total token: {}, Elaps: {}s",
-        markdown_content,
-        set_model,
-        tokens.len(),
-        end.signed_duration_since(start).num_seconds(),
-    );
-
-    let pass_msg = Message {
+    // レスポンスをメッセージ履歴に保存し
+    // メッセージ履歴を表示
+    // Streamでは取れないトークン数を計算する
+    let new_response = Message {
         role: ChatGPTRole::Assistant.to_string(),
-        content: msg.to_string(),
+        content: result.to_string(),
     };
 
-    Ok(pass_msg)
+    // メッセージを処理して連結
+    let all_messages =
+        process_and_concat_messages(new_response).expect("Failed to process and concat messages");
+
+    // println!("markdown_content: {}", markdown_content);
+
+    // トークン数・実行時間を算出し、整形する
+    Ok(create_response(
+        markdown_content.as_str(),
+        set_model,
+        all_messages.as_str(),
+        start,
+    ))
 }
 
 #[tauri::command]
@@ -418,48 +403,64 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
     }
 
     // マークダウン整形
-    let markdown_content =
-        match markdown::to_html_with_options(result.as_str(), &markdown::Options::gfm()) {
-            Ok(content) => content,
-            Err(e) => return Err(format!("markdown::to_html_with_options error: {}", e)),
-        };
+    let markdown_content = convert_markdown_to_html(result.as_str())?;
 
     // レスポンスをメッセージ履歴に保存し
     // メッセージ履歴を表示
     // Streamでは取れないトークン数を計算する
-    let mut tokenize_resource: String = String::new();
-    match MESSAGES
-        .lock()
-        .map_err(|err| format!("lazy struct data lock error: {}", err))
-    {
-        Ok(mut guard_messages) => {
-            let pass_msg = Message {
-                role: ChatGPTRole::Assistant.to_string(),
-                content: result.to_string(),
-            };
-            guard_messages.push(pass_msg);
-            // メッセージ履歴を表示
-            for message in guard_messages.iter() {
-                tokenize_resource.push_str(message.content.as_str());
-            }
-        }
-        Err(e) => return Err(format!("lazy struct data lock error: {}", e)),
-    }
+    let new_response = Message {
+        role: ChatGPTRole::Assistant.to_string(),
+        content: result.to_string(),
+    };
+    // メッセージを処理して連結
+    let all_messages =
+        process_and_concat_messages(new_response).expect("Failed to process and concat messages");
 
-    // 応答メッセージをヒストリに追加
+    // トークン数・実行時間を算出し、整形する
+    Ok(create_response(
+        markdown_content.as_str(),
+        set_model,
+        all_messages.as_str(),
+        start,
+    ))
+}
+
+fn convert_markdown_to_html(markdown_text: &str) -> Result<String, String> {
+    markdown::to_html_with_options(markdown_text, &markdown::Options::gfm())
+        .map_err(|e| format!("markdown::to_html_with_options error: {}", e))
+}
+
+fn process_and_concat_messages(new_message: Message) -> Result<String, String> {
+    match MESSAGES.lock() {
+        Ok(mut guard_messages) => {
+            guard_messages.push(new_message);
+            let concat_messages = guard_messages
+                .iter()
+                .map(|message| message.content.as_str())
+                .collect::<String>();
+            Ok(concat_messages)
+        }
+        Err(e) => Err(format!("lazy struct data lock error: {}", e)),
+    }
+}
+
+fn create_response(
+    markdown_content: &str,
+    set_model: &str,
+    tokenize_resource: &str,
+    start: chrono::DateTime<chrono::Local>,
+) -> String {
     let end = Local::now();
     let bpe = cl100k_base().unwrap();
-    let tokens = bpe.encode_with_special_tokens(tokenize_resource.as_str());
+    let tokens = bpe.encode_with_special_tokens(tokenize_resource);
     let msg = format!(
         "{}\n\nModel: {}, Total token: {}, Elaps: {}s",
         markdown_content,
-        req.model,
+        set_model,
         tokens.len(),
         end.signed_duration_since(start).num_seconds(),
     );
-
-    // マークダウン整形済みのメッセージを返します
-    Ok(msg)
+    msg
 }
 
 #[tauri::command]
@@ -503,6 +504,7 @@ fn request_system(num: u8) -> std::result::Result<String, String> {
         Err(e) => Err(format!("lazy struct data lock error: {}", e)),
     }
 }
+
 
 fn main() {
     dotenv().ok();
