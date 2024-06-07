@@ -19,7 +19,8 @@ function App() {
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isUpload, setIsUpload] = useState<boolean>(false);
 
-
+  const MAX_WIDTH = 512; // 例として800pxに設定
+  const MAX_HEIGHT = 512; // 例として800pxに設定
 
   const StatusNotSupport = "❌ Browser doesn't support speech recognition."
   const StatusAvailable = "❌ Microphone function is off, access to microphone is required."
@@ -347,17 +348,18 @@ function App() {
               // upload file
               const files = e.clipboardData.files;
               // console.log("files: ");
-              // console.log(files);
+              console.log(files);
 
               // get image file
               const file = files[0];
               if (file) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  setImageUrl(ev.target?.result as string);
+                const base_image = resizeImageAndConvertToBase64(file, MAX_WIDTH, MAX_HEIGHT);
+                base_image.then((base64) => {
+                  console.log(base64);
+
+                  setImageUrl(base64);
                   setIsUpload(false);
-                };
-                reader.readAsDataURL(file);
+                });
               }
             }}
             onChange={(e) => {
@@ -407,5 +409,52 @@ const ImageComponent = ({ images, size }: { images: string[], size: number }) =>
     ))
   );
 }
+
+const resizeImageAndConvertToBase64 = (file: File, maxWidth: number, maxHeight: number): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img: HTMLImageElement = document.createElement("img");
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+
+        // 元の画像サイズを取得
+        const originalWidth = img.width;
+        const originalHeight = img.height;
+
+        // リサイズするサイズを計算
+        let newWidth = originalWidth;
+        let newHeight = originalHeight;
+
+        if (originalWidth > maxWidth || originalHeight > maxHeight) {
+          const widthRatio = maxWidth / originalWidth;
+          const heightRatio = maxHeight / originalHeight;
+          const bestRatio = Math.min(widthRatio, heightRatio);
+
+          newWidth = originalWidth * bestRatio;
+          newHeight = originalHeight * bestRatio;
+        }
+
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+        ctx.drawImage(img, 0, 0, newWidth, newHeight);
+        const dataUrl = canvas.toDataURL('image/png');
+        resolve(dataUrl);
+      };
+      img.src = event.target!.result as string;
+    };
+    reader.onerror = (error) => {
+      reject(new Error('Failed to read file: ' + error));
+    };
+
+    reader.readAsDataURL(file);
+  });
+};
 
 export default App;

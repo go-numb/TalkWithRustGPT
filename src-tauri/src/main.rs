@@ -23,8 +23,6 @@ use rs_openai::chat::Role as ChatGPTRole;
 use tiktoken_rs::cl100k_base;
 
 // new openai
-use tauri::regex::Regex;
-
 use openai_api_rs::v1::api::Client as OClient;
 use openai_api_rs::v1::chat_completion::{self, ChatCompletionRequest};
 // use openai_api_rs::v1::common::GPT4_O;
@@ -446,14 +444,6 @@ async fn gpt_request(b: u8, msg: &str, src: &str ) -> std::result::Result<String
     };
 
     let client = OClient::new(apikey.to_string());
-
-    let base64_regex = Regex::new(r"data:image/png;base64,[^\s]+").unwrap();
-    let mut base64_data = String::new();
-
-    // Extract base64 string from msg
-    for cap in base64_regex.captures_iter(msg) {
-        base64_data = cap[0].to_string(); // Assuming there is only one base64 encoded string
-    }
 
     let set_model: &str = if b == 1 {
         "gpt-4o"
