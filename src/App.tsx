@@ -1,13 +1,25 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import "./App.css";
+import { Flex, Space, Button, Image, Form, Input, } from "antd";
+const { TextArea } = Input;
 
 // Voice API
 import "regenerator-runtime/runtime";
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 
+type Fields = {
+  b?: number;
+  msg?: string;
+};
 
 function App() {
+  const [form] = Form.useForm();
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [isUpload, setIsUpload] = useState<boolean>(false);
+
+
+
   const StatusNotSupport = "❌ Browser doesn't support speech recognition."
   const StatusAvailable = "❌ Microphone function is off, access to microphone is required."
 
@@ -30,16 +42,20 @@ function App() {
     isMicrophoneAvailable,
   } = useSpeechRecognition();
   const [msg, setMsg] = useState("");
+
+  // // file upload
+  // const [fileList, setFileList] = useState<UploadFile<any>[]>([]);
+
   const [query, setQuery] = useState("");
   const [result, setResult] = useState("");
-  const [model, setModel] = useState(Number);
-  const [AI, setAI] = useState(Number);
-  const [status, setStatus] = useState("");
+  const [model, setModel] = useState<number>(1);
+  const [AI, setAI] = useState<number>(Number);
+  const [status, setStatus] = useState(StatusModelHigh);
 
   // 起動時に、環境変数: CHATGPTTOKEN、ANTHROPIC_API_KEYどちらもなければ、setResultにエラーメッセージを表示する
   const init_check = async () => {
     const isEnvAvailable = await invoke("is_there_env");
-    if (isEnvAvailable !== true) {    
+    if (isEnvAvailable !== true) {
       setResult(`[ALERT]ご利用できません: 各AIサービスを利用するための環境変数: CHATGPTTOKENまたは ANTHROPIC_API_KEYを設定してください。`);
     }
   };
@@ -51,8 +67,9 @@ function App() {
   // useEffect 変数監視セクション
   useEffect(() => { // Resultが更新され、Queryが刷新されたら、入力フォームにフォーカス
     // 入力フォームにフォーカス
-    const textField = document.getElementById("input-msg") as HTMLInputElement;
-    textField?.focus();
+    // const textField = document.getElementById("input-msg") as HTMLInputElement;
+    // textField?.focus();
+    window.scrollTo(0, 0);
   }, [query]);
 
   if (!browserSupportsSpeechRecognition) {
@@ -85,9 +102,12 @@ function App() {
 
   useEffect(() => { // 音声認識が開始されたら、入力フォームにフォーカス
     if (listening) {
-      console.debug(`listening: ${listening}, `, transcript);
       setMsg(transcript);
       setStatus(StatusListen);
+
+      form.setFieldValue("msg", transcript);
+
+      console.debug(`listening: ${listening}, ${transcript}, msg: ${msg}`);
 
       let [is_there, command] = is_command_enter(transcript);
       if (is_there) {
@@ -145,7 +165,7 @@ function App() {
   }
 
   // gpt_request Rust Tauri APIを呼び出す
-  function gpt_request(req: string) {
+  const gpt_request = (req: string) => {
     let _msg = msg;
     if (req != "") {
       console.debug("req: ", req);
@@ -159,6 +179,11 @@ function App() {
       return;
     }
     setStatus(StatusThinking);
+
+    if (imageUrl && !isUpload) {
+      _msg += `reference image base64: ${imageUrl}`;
+      setIsUpload(true);
+    }
 
     invoke("gpt_stream_request", { b: model, msg: _msg })
       .then((res) => {
@@ -178,14 +203,14 @@ function App() {
       });
   };
 
-  function reset_messages() {
+  const reset_messages = () => {
     memo();
     invoke("reset_messages");
     setStatus(StatusResetMessages);
   };
 
   // リセット及びクローズとともにメモを作成する
-  function memo() {
+  const memo = () => {
     invoke("memo")
       .then((message) => {
         setResult(`${message}`);
@@ -196,7 +221,7 @@ function App() {
       });
   };
 
-  function switch_model() {
+  const switch_model = () => {
     if (model != 0) {
       setModel(0);
       setStatus(StatusModelLow);
@@ -206,7 +231,7 @@ function App() {
     }
   }
 
-  function switch_ai() {
+  const switch_ai = () => {
     if (AI != 0) {
       setAI(0);
       setStatus(StatusAIChatGPT);
@@ -217,12 +242,21 @@ function App() {
   }
 
   // Usefull functions
-  function reset_all_vers() {
+  const reset_all_vers = () => {
+    console.log("reset_all_vers");
+
     resetTranscript();
     setMsg("");
+    form.setFieldValue("msg", "");
+
+    // 画面のスクロールを最上部に移動
+    window.scrollTo(0, 0);
+
+    console.log(msg);
+
   }
 
-  function is_command_enter(str: string): [Boolean, string] {
+  const is_command_enter = (str: string): [Boolean, string] => {
     let _msg = str;
     if (_msg.endsWith("エンター。")) {
       return [true, "エンター"];
@@ -235,7 +269,7 @@ function App() {
     return [false, ""];
   }
 
-  function request_system(num: number) {
+  const request_system = (num: number) => {
     return () => {
       invoke("request_system", { num: num })
         .then((res) => {
@@ -249,66 +283,113 @@ function App() {
     }
   }
 
-
+  // const props: UploadProps = {
+  //   name: 'file',
+  //   multiple: true,
+  //   onChange(info) {
+  //     // set file list to setFileList
+  //     setFileList(info.fileList);
+  //   },
+  //   // onDrop(e) {
+  //   //   console.log('Dropped files', e.dataTransfer.files);
+  //   //   const files = e.dataTransfer.files;
+  //   //   // files to setFileList
+  //   //   setFileList(files);
+  //   // },
+  // };
 
   return (
-    <div className="container">
-      <div className="row" style={{
-        marginBottom: "1rem",
-      }}>
-        <div style={{
-          position: "absolute",
-          top: "1rem",
-          textAlign: "center",
-          display: "flex",
-          justifyContent: "space-between",
-          width: "100%",
-        }}>
-          {/* 各ButtonとButtonの間隔を等間隔にし、かつ、最大幅で設置する */}
-          <button style={{ flexGrow: 0 }} onClick={request_system(1)} title="厳格で正確な">&#x1f9d0;</button>
-          <button style={{ flexGrow: 0 }} onClick={request_system(2)} title="フレンドリーな">&#x1fae0;</button>
-          <button style={{ flexGrow: 0 }} onClick={request_system(3)} title="肯定的な">&#x1f973;</button>
-          <button style={{ flexGrow: 0 }} onClick={request_system(4)} title="批判的な">&#x1f608;</button>
-          <button style={{ flexGrow: 0 }} onClick={request_system(0)} title="無指示">&#x1fae5;</button>
-        </div>
-      </div>
+    <Flex gap="large" vertical>
+      {/* 各ButtonとButtonの間隔を等間隔にし、かつ、最大幅で設置する */}
+      <Flex gap={'large'} justify="space-between">
+        <Button size="large" onClick={request_system(1)} title="厳格で正確な">&#x1f9d0;</Button>
+        <Button size="large" onClick={request_system(2)} title="フレンドリーな">&#x1fae0;</Button>
+        <Button size="large" onClick={request_system(3)} title="肯定的な">&#x1f973;</Button>
+        <Button size="large" onClick={request_system(4)} title="批判的な">&#x1f608;</Button>
+        <Button size="large" onClick={request_system(0)} title="無指示">&#x1fae5;</Button>
+      </Flex>
 
-      <div className="row">
-        <img onClick={reset_messages} src="/delete.png" className="logo reset message" alt="reset message logo" title="reset messages" />
-        <img onClick={switch_model} src="/switch-model.png" className="logo switch model" alt="switch model logo" title="switch set model" />
-        <img onClick={switch_ai} src={AI === 0 ? "/chatgpt-ai.png" : "/claude-ai.png"} className="logo switch ai" alt="switch ai logo" title="switch set ai" />
-        <img onClick={speech} src="/vc.png" className="logo vc" alt="vc logo" title="start/end vc for message" />
-      </div>
+      <Flex gap={'large'} justify="space-between" vertical={false}>
+        <Image preview={false} style={{ maxWidth: '128px' }} onClick={reset_messages} src="/delete.png" className="logo reset message" alt="reset message logo" title="reset messages" />
+        <Image preview={false} style={{ maxWidth: '128px' }} onClick={switch_model} src="/switch-model.png" className="logo switch model" alt="switch model logo" title="switch set model" />
+        <Image preview={false} style={{ maxWidth: '128px' }} onClick={switch_ai} src={AI === 0 ? "/chatgpt-ai.png" : "/claude-ai.png"} className="logo switch ai" alt="switch ai logo" title="switch set ai" />
+        <Image preview={false} style={{ maxWidth: '128px' }} onClick={speech} src="/vc.png" className="logo vc" alt="vc logo" title="start/end vc for message" />
+      </Flex>
 
-      <div style={{ textAlign: "left" }}>
+      <Flex wrap vertical={false} gap={'large'} justify="center">
         <div dangerouslySetInnerHTML={{ __html: query }} />
-      </div>
-      <div style={{ textAlign: "left" }} className="word-break" >
-        <div dangerouslySetInnerHTML={{ __html: result }} />
-      </div>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
+        <div className="code-container" dangerouslySetInnerHTML={{ __html: result }} />
+      </Flex>
+
+      <Form
+        name="basic"
+        form={form}
+        wrapperCol={{ span: 24 }}
+        // style={{ maxWidth: 600 }}
+        className="form"
+        onFinish={(_) => {
           switch_request("");
         }}
       >
-        <textarea
-          id="input-msg"
-          value={msg}
-          rows={5}
-          cols={60}
-          onChange={(e) => setMsg(e.currentTarget.value)}
-          placeholder="Enter a msg..."
-        />
-        <button type="submit">send</button>
-      </form>
-      <div style={{ textAlign: "center" }} className="word-break" >
+        <Form.Item<Fields>
+          name="msg"
+          wrapperCol={{ span: 24 }}
+        >
+          <TextArea
+            value={msg}
+            rows={4}
+            onPaste={(e) => {
+              e.preventDefault();
+              // upload file
+              const files = e.clipboardData.files;
+              console.log("files: ");
+              
+              console.log(files);
+
+              // get image file
+              const file = files[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  setImageUrl(ev.target?.result as string);
+                  setIsUpload(false);
+                };
+                reader.readAsDataURL(file);
+              }
+
+            }}
+            onChange={(e) => {
+              setMsg(e.currentTarget.value)
+            }}
+            placeholder="Enter a msg..."
+          />
+        </Form.Item>
+
+        <ImageComponent image={imageUrl ? imageUrl : ""} />
+
+
+        <Form.Item wrapperCol={{ offset: 21, span: 3 }}>
+          <Button type="primary" htmlType="submit">
+            SEND
+          </Button>
+        </Form.Item>
+      </Form>
+
+      <Space className="footer-fixed">
         {status}
-      </div>
-    </div>
+      </Space>
+
+    </Flex>
   );
+}
+
+// imageがあれば、表示するコンポネント
+const ImageComponent = ({ image }: { image: string }) => {
+  return <Image
+          width={200}
+          src={image}
+        />;
 }
 
 export default App;

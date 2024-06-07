@@ -271,11 +271,47 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<String, String>
     ))
 }
 
+// // image uploader
+// #[tauri::command]
+// async fn upload_image(image: String) -> std::result::Result<String, String> {
+//     // 環境変数からAPIキーを取得
+//     let api_key = env::var("ANTHROPIC_API_KEY").expect("Expected an API key");
+
+//     // クライアントを作成
+//     let client = Client::new();
+
+//     // リクエストを送信
+//     let res = match client
+//         .post("https://api.anthropic.com/v1/images")
+//         .header("x-api-key", api_key)
+//         .header("anthropic-version", "2023-06-01")
+//         .header("content-type", "application/json")
+//         .json(&image)
+//         .send()
+//         .await {
+//             Ok(response) => response,
+//             Err(err) => {
+//                 println!("Error: {}", err);
+//                 return Err(format!("Request error: {}", err));
+//             }
+//         };
+
+//     // レスポンスボディをテキストとして表示（必要に応じて）
+//     let res_json: Value = match res.json().await {
+//         Ok(res) => res,
+//         Err(err) => {
+//             print!("{}", err);
+//             Value::Null
+//         }
+//     };
+
+
+// }
+
 #[tauri::command]
 async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, String> {
     // タイムスタンプを取得
     let start = Local::now();
-
     // 環境変数からAPIキーを取得
     let apikey = match env::var("CHATGPTTOKEN") {
         Ok(val) => val,
@@ -290,7 +326,8 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
 
     let mut set_model: &str = "gpt-3.5-turbo-0125";
     if b == 1 {
-        set_model = "gpt-4-0125-preview";
+        // set_model = "gpt-4-0125-preview";
+        set_model = "gpt-4o";
     }
 
     // メッセージ履歴に保存する

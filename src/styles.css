@@ -30,36 +30,21 @@ textarea {
   font-family: Consolas, 'Courier New', 'Yu Gothic UI', monospace;
 }
 
-.container {
+/* .container {
   margin: 0;
   padding-top: 2vh;
   display: flex;
   flex-direction: column;
   justify-content: center;
   text-align: center;
+} */
+
+.m-1 {
+  margin: 1em;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-.row img {
-  height: 5rem;
-  margin: 0 1rem;
-  will-change: filter;
-  transition: 0.75s;
+.p-b-1 {
+  padding-bottom: 2em;
 }
 
 a {

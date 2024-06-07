@@ -1,3 +1,14 @@
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: 0.75s;
+}
+
+.logo.tauri:hover {
+  filter: drop-shadow(0 0 2em #24c8db);
+}
+
 .logo.vite:hover {
   filter: drop-shadow(0 0 2em #747bff);
 }
@@ -13,6 +24,33 @@
   -webkit-line-clamp: 2;
 }
 
-.word-break {
-  word-break: break-word;
+
+.code-container {
+  width: 100%;
+  margin: 0 auto;
+  /* 必要に応じて適切な幅を設定 */
+  white-space: pre-wrap;
+  /* 必要に応じてpre-wrap、pre-line、normalを選択 */
+  word-wrap: break-word;
+  /* 長すぎる単語を折り返し */
+  overflow-x: auto;
+  /* 必要に応じてauto、scroll、hiddenを選択 */
+  max-width: 100%;
+  /* 親要素の幅を超えないようにする */
+  box-sizing: border-box;
+  /* パディングとボーダーを幅に含める */
+}
+
+.form {
+  margin-bottom: 3rem;
+}
+
+.footer-fixed {
+  background-color: #fff;
+  box-sizing: border-box;
+  position: fixed;
+  left:0;
+  bottom: 0;
+  padding: 1rem;
+  width: 100%;
 }
