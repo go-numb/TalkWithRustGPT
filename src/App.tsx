@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import "./App.css";
-import { Flex, Space, Button, Image, Form, Input, } from "antd";
+import { Flex, Space, Row, Col, Button, Image, Form, Input, } from "antd";
 const { TextArea } = Input;
 
 // Voice API
@@ -16,6 +16,7 @@ type Fields = {
 function App() {
   const [form] = Form.useForm();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isUpload, setIsUpload] = useState<boolean>(false);
 
 
@@ -172,7 +173,7 @@ function App() {
 
       _msg = req;
     }
-    console.debug(_msg);
+    // console.debug(_msg);
 
     if (_msg === "") {
       setResult("Please enter a msg.");
@@ -180,17 +181,21 @@ function App() {
     }
     setStatus(StatusThinking);
 
+    let src = "";
     if (imageUrl && !isUpload) {
-      _msg += `reference image base64: ${imageUrl}`;
+      src = imageUrl;
+      setImageUrls((prev) => [...prev, imageUrl]);
+
       setIsUpload(true);
+      setImageUrl(null);
     }
 
-    invoke("gpt_stream_request", { b: model, msg: _msg })
+    invoke("gpt_request", { b: model, msg: _msg, src: src })
       .then((res) => {
         setResult(`${res}`);
       })
       .catch((err) => {
-        console.error(`gpt_stream_request > ${err}`);
+        console.error(`gpt_request > ${err}`);
 
         setStatus(`error: ${err}`);
       })
@@ -206,6 +211,7 @@ function App() {
   const reset_messages = () => {
     memo();
     invoke("reset_messages");
+    setImageUrls([]);
     setStatus(StatusResetMessages);
   };
 
@@ -247,6 +253,7 @@ function App() {
 
     resetTranscript();
     setMsg("");
+    setImageUrl(null);
     form.setFieldValue("msg", "");
 
     // 画面のスクロールを最上部に移動
@@ -283,21 +290,6 @@ function App() {
     }
   }
 
-  // const props: UploadProps = {
-  //   name: 'file',
-  //   multiple: true,
-  //   onChange(info) {
-  //     // set file list to setFileList
-  //     setFileList(info.fileList);
-  //   },
-  //   // onDrop(e) {
-  //   //   console.log('Dropped files', e.dataTransfer.files);
-  //   //   const files = e.dataTransfer.files;
-  //   //   // files to setFileList
-  //   //   setFileList(files);
-  //   // },
-  // };
-
   return (
     <Flex gap="large" vertical>
       {/* 各ButtonとButtonの間隔を等間隔にし、かつ、最大幅で設置する */}
@@ -317,7 +309,7 @@ function App() {
       </Flex>
 
       <Flex wrap vertical={false} gap={'large'} justify="center">
-        <div dangerouslySetInnerHTML={{ __html: query }} />
+        <div className="line_wrap" dangerouslySetInnerHTML={{ __html: query }} />
 
         <div className="code-container" dangerouslySetInnerHTML={{ __html: result }} />
       </Flex>
@@ -340,12 +332,22 @@ function App() {
             value={msg}
             rows={4}
             onPaste={(e) => {
+              // text only
+              // console.log("onPaste" + msg);
+
+              // 通常通りのペーストを行う
+              setMsg((prev) => prev + e.clipboardData.getData("text"));
+            }}
+            onPasteCapture={(e) => {
+              // image only
+              if (!e.clipboardData.files.length) {
+                return
+              }
               e.preventDefault();
               // upload file
               const files = e.clipboardData.files;
-              console.log("files: ");
-              
-              console.log(files);
+              // console.log("files: ");
+              // console.log(files);
 
               // get image file
               const file = files[0];
@@ -357,7 +359,6 @@ function App() {
                 };
                 reader.readAsDataURL(file);
               }
-
             }}
             onChange={(e) => {
               setMsg(e.currentTarget.value)
@@ -366,7 +367,17 @@ function App() {
           />
         </Form.Item>
 
-        <ImageComponent image={imageUrl ? imageUrl : ""} />
+        <Flex gap={"large"}>
+          <Row>
+            <Col>
+              <ImageComponent images={imageUrl ? [imageUrl] : []} size={200} />
+
+              <Flex wrap>
+                <ImageComponent images={imageUrls ? imageUrls : []} size={58} />
+              </Flex>
+            </Col>
+          </Row>
+        </Flex>
 
 
         <Form.Item wrapperCol={{ offset: 21, span: 3 }}>
@@ -385,11 +396,16 @@ function App() {
 }
 
 // imageがあれば、表示するコンポネント
-const ImageComponent = ({ image }: { image: string }) => {
-  return <Image
-          width={200}
-          src={image}
-        />;
+const ImageComponent = ({ images, size }: { images: string[], size: number }) => {
+  return (
+    images.map((image, index) => (
+      <Image
+        key={index}
+        width={size}
+        src={image}
+      />
+    ))
+  );
 }
 
 export default App;

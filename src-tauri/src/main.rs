@@ -277,6 +277,7 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<String, String>
         markdown_content.as_str(),
         set_model,
         all_messages.as_str(),
+        "",
         start,
     ))
 }
@@ -431,12 +432,13 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<String, String>
 //         markdown_content.as_str(),
 //         set_model,
 //         all_messages.as_str(),
+// "",
 //         start,
 //     ))
 // }
 
 #[tauri::command]
-async fn gpt_request(b: u8, msg: &str) -> std::result::Result<String, String> {
+async fn gpt_request(b: u8, msg: &str, src: &str ) -> std::result::Result<String, String> {
     let start = Local::now();
     let apikey = match env::var("CHATGPTTOKEN") {
         Ok(val) => val,
@@ -459,16 +461,13 @@ async fn gpt_request(b: u8, msg: &str) -> std::result::Result<String, String> {
         "gpt-3.5-turbo-0125"
     };
 
-    // Remove base64 string from msg
-    let updated_msg = base64_regex.replace_all(msg, "").to_string();
-
     let messages: Vec<Message> = {
         let mut guard_messages: std::sync::MutexGuard<'_, Vec<Message>> = MESSAGES
             .lock()
             .map_err(|err| format!("lazy struct data lock error: {}", err))?;
         guard_messages.push(Message {
             role: ChatGPTRole::User.to_string(),
-            content: updated_msg.to_string(),
+            content: msg.to_string(),
         });
         guard_messages.clone()
     };
@@ -490,7 +489,7 @@ async fn gpt_request(b: u8, msg: &str) -> std::result::Result<String, String> {
         .flat_map(|message| {
             let role = determine_message_role(&message.role);
 
-            if !base64_data.is_empty() {
+            if !src.is_empty() {
                 if role.clone() == chat_completion::MessageRole::user {
                     vec![chat_completion::ChatCompletionMessage {
                         role: role.clone(),
@@ -504,7 +503,7 @@ async fn gpt_request(b: u8, msg: &str) -> std::result::Result<String, String> {
                                 r#type: chat_completion::ContentType::image_url,
                                 text: None,
                                 image_url: Some(chat_completion::ImageUrlType {
-                                    url: base64_data.to_string(),
+                                    url: src.to_string(),
                                 }),
                             },
                         ]),
@@ -597,6 +596,7 @@ async fn gpt_request(b: u8, msg: &str) -> std::result::Result<String, String> {
         markdown_content.as_str(),
         set_model,
         all_messages.as_str(),
+        src,
         start,
     ))
 }
@@ -624,11 +624,12 @@ fn create_response(
     markdown_content: &str,
     set_model: &str,
     tokenize_resource: &str,
+    src: &str,
     start: chrono::DateTime<chrono::Local>,
 ) -> String {
     let end = Local::now();
     let bpe = cl100k_base().unwrap();
-    let tokens = bpe.encode_with_special_tokens(tokenize_resource);
+    let tokens = bpe.encode_with_special_tokens([tokenize_resource, src].concat().as_str());
     let msg = format!(
         "{}\n\nModel: {}, Total token: {}, Elaps: {}s",
         markdown_content,
