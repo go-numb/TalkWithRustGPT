@@ -5,6 +5,7 @@
 mod mods;
 
 use dotenv::dotenv;
+// use openai_api_rs::v1::message;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -13,13 +14,22 @@ use serde_json::Value;
 use log::{error, info};
 
 // new OpneAI
-use futures::StreamExt;
+// use futures::StreamExt;
 use rs_openai::chat::Role as ChatGPTRole;
-use rs_openai::chat::{
-    ChatCompletionMessage, ChatCompletionMessageRequestBuilder, CreateChatRequestBuilder,
-};
-use rs_openai::OpenAI;
+// use rs_openai::chat::{
+//     ChatCompletionMessage, ChatCompletionMessageRequestBuilder, CreateChatRequestBuilder,
+// };
+// use rs_openai::OpenAI;
 use tiktoken_rs::cl100k_base;
+
+// new openai
+use tauri::regex::Regex;
+
+use openai_api_rs::v1::api::Client as OClient;
+use openai_api_rs::v1::chat_completion::{self, ChatCompletionRequest};
+// use openai_api_rs::v1::common::GPT4_O;
+
+use std::vec;
 
 use core::panic;
 use std::env;
@@ -271,113 +281,271 @@ async fn claude_request(b: u8, msg: &str) -> std::result::Result<String, String>
     ))
 }
 
-// // image uploader
 // #[tauri::command]
-// async fn upload_image(image: String) -> std::result::Result<String, String> {
+// async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, String> {
+//     // タイムスタンプを取得
+//     let start = Local::now();
 //     // 環境変数からAPIキーを取得
-//     let api_key = env::var("ANTHROPIC_API_KEY").expect("Expected an API key");
+//     let apikey = match env::var("CHATGPTTOKEN") {
+//         Ok(val) => val,
+//         Err(e) => format!("couldn't interpret CHATGPTTOKEN: {}", e).to_string(),
+//     };
 
-//     // クライアントを作成
-//     let client = Client::new();
+//     // create client with APIKEY
+//     let client = OpenAI::new(&OpenAI {
+//         api_key: apikey,
+//         org_id: None,
+//     });
+
+//     let mut set_model: &str = "gpt-3.5-turbo-0125";
+//     if b == 1 {
+//         // set_model = "gpt-4-0125-preview";
+//         set_model = "gpt-4o";
+//     }
+
+//     // メッセージ履歴に保存する
+//     // グローバル変数のロックを短くするため、リクエストをはさみ二度アクセスしている
+//     let messages: Vec<Message> = {
+//         let mut guard_messages: std::sync::MutexGuard<'_, Vec<Message>> = MESSAGES.lock().map_err(
+//             |err: std::sync::PoisonError<std::sync::MutexGuard<'_, Vec<Message>>>| {
+//                 format!("lazy struct data lock error: {}", err)
+//             },
+//         )?;
+//         guard_messages.push(Message {
+//             role: ChatGPTRole::User.to_string(),
+//             content: msg.to_string(),
+//         });
+
+//         guard_messages.clone()
+//     };
+
+//     // 履歴を渡すために、ChatCompletionMessageに変換します
+//     let pass_vec: Vec<ChatCompletionMessage> = messages
+//         .iter()
+//         .map(|message| {
+//             ChatCompletionMessageRequestBuilder::default()
+//                 .role(ChatGPTRole::User)
+//                 .content(message.content.clone())
+//                 .name(message.role.clone())
+//                 .build()
+//                 .unwrap()
+//         })
+//         .collect();
+
+//     // リクエストボディを作成
+//     let req = match CreateChatRequestBuilder::default()
+//         .model(set_model.to_string())
+//         .stream(true)
+//         .messages(pass_vec)
+//         .build()
+//     {
+//         Ok(req) => req,
+//         Err(e) => return Err(format!("CreateChatRequestBuilder error: {}", e)),
+//     };
 
 //     // リクエストを送信
-//     let res = match client
-//         .post("https://api.anthropic.com/v1/images")
-//         .header("x-api-key", api_key)
-//         .header("anthropic-version", "2023-06-01")
-//         .header("content-type", "application/json")
-//         .json(&image)
-//         .send()
-//         .await {
-//             Ok(response) => response,
-//             Err(err) => {
-//                 println!("Error: {}", err);
-//                 return Err(format!("Request error: {}", err));
-//             }
-//         };
+//     let mut stream = match client.chat().create_with_stream(&req).await {
+//         Ok(stream) => stream,
+//         Err(e) => return Err(format!("client.chat().create_with_stream error: {}", e)),
+//     };
 
-//     // レスポンスボディをテキストとして表示（必要に応じて）
-//     let res_json: Value = match res.json().await {
-//         Ok(res) => res,
-//         Err(err) => {
-//             print!("{}", err);
-//             Value::Null
+//     // VoiceIDの指定を読み込み
+//     let mut is_voice: bool;
+//     let voice_id: i16 = match env::var("VOICEID") {
+//         Ok(val) => {
+//             is_voice = true;
+//             info!("VOICEID: {}", val);
+//             val.parse().unwrap()
+//         }
+//         Err(e) => {
+//             info!("couldn't interpret VOICEID: {}", e);
+//             is_voice = false;
+//             1
 //         }
 //     };
 
+//     let mut result = String::new();
+//     let mut delta = String::new();
+//     let mut reason = String::new();
+//     while let Some(res) = stream.next().await {
+//         let response = match res {
+//             Ok(response) => response,
+//             Err(e) => {
+//                 return Err(format!("stream.next().await error: {}", e));
+//             }
+//         };
 
+//         response.choices.iter().for_each(|choice| {
+//             if let Some(ref content) = choice.delta.content {
+//                 delta.push_str(content);
+//             }
+//             // 終了理由を取得する
+//             reason = match &choice.finish_reason {
+//                 Some(reason) => reason.clone(),
+//                 None => String::new(),
+//             };
+//         });
+
+//         // Stop文字を定義し、中途処理を行います
+//         if delta.ends_with('.')
+//             || delta.ends_with('。')
+//             || delta.ends_with('\n')
+//             || !reason.is_empty()
+//         {
+//             result.push_str(&delta);
+//             // メッセージを発言
+//             // 棒読みちゃんが起動していない場合は無視します
+//             if is_voice {
+//                 match mods::voice::say(voice_id, delta.as_str()) {
+//                     Ok(_) => {}
+//                     Err(e) => {
+//                         info!(
+//                             "棒読みちゃんが起動していないか、エラーが発生しました: {}",
+//                             e
+//                         );
+//                         is_voice = false;
+//                     }
+//                 };
+//             }
+//             // デルタ文字列を初期化
+//             delta = String::new();
+//         }
+//     }
+
+//     // マークダウン整形
+//     let markdown_content = convert_markdown_to_html(result.as_str())?;
+
+//     // レスポンスをメッセージ履歴に保存し
+//     // メッセージ履歴を表示
+//     // Streamでは取れないトークン数を計算する
+//     let new_response = Message {
+//         role: ChatGPTRole::Assistant.to_string(),
+//         content: result.to_string(),
+//     };
+//     // メッセージを処理して連結
+//     let all_messages =
+//         process_and_concat_messages(new_response).expect("Failed to process and concat messages");
+
+//     // トークン数・実行時間を算出し、整形する
+//     Ok(create_response(
+//         markdown_content.as_str(),
+//         set_model,
+//         all_messages.as_str(),
+//         start,
+//     ))
 // }
 
 #[tauri::command]
-async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, String> {
-    // タイムスタンプを取得
+async fn gpt_request(b: u8, msg: &str) -> std::result::Result<String, String> {
     let start = Local::now();
-    // 環境変数からAPIキーを取得
     let apikey = match env::var("CHATGPTTOKEN") {
         Ok(val) => val,
-        Err(e) => format!("couldn't interpret CHATGPTTOKEN: {}", e).to_string(),
+        Err(e) => return Err(format!("couldn't interpret CHATGPTTOKEN: {}", e)),
     };
 
-    // create client with APIKEY
-    let client = OpenAI::new(&OpenAI {
-        api_key: apikey,
-        org_id: None,
-    });
+    let client = OClient::new(apikey.to_string());
 
-    let mut set_model: &str = "gpt-3.5-turbo-0125";
-    if b == 1 {
-        // set_model = "gpt-4-0125-preview";
-        set_model = "gpt-4o";
+    let base64_regex = Regex::new(r"data:image/png;base64,[^\s]+").unwrap();
+    let mut base64_data = String::new();
+
+    // Extract base64 string from msg
+    for cap in base64_regex.captures_iter(msg) {
+        base64_data = cap[0].to_string(); // Assuming there is only one base64 encoded string
     }
 
-    // メッセージ履歴に保存する
-    // グローバル変数のロックを短くするため、リクエストをはさみ二度アクセスしている
+    let set_model: &str = if b == 1 {
+        "gpt-4o"
+    } else {
+        "gpt-3.5-turbo-0125"
+    };
+
+    // Remove base64 string from msg
+    let updated_msg = base64_regex.replace_all(msg, "").to_string();
+
     let messages: Vec<Message> = {
-        let mut guard_messages: std::sync::MutexGuard<'_, Vec<Message>> = MESSAGES.lock().map_err(
-            |err: std::sync::PoisonError<std::sync::MutexGuard<'_, Vec<Message>>>| {
-                format!("lazy struct data lock error: {}", err)
-            },
-        )?;
+        let mut guard_messages: std::sync::MutexGuard<'_, Vec<Message>> = MESSAGES
+            .lock()
+            .map_err(|err| format!("lazy struct data lock error: {}", err))?;
         guard_messages.push(Message {
             role: ChatGPTRole::User.to_string(),
-            content: msg.to_string(),
+            content: updated_msg.to_string(),
         });
-
         guard_messages.clone()
     };
 
-    // 履歴を渡すために、ChatCompletionMessageに変換します
-    let pass_vec: Vec<ChatCompletionMessage> = messages
+    // Function to determine the MessageRole
+    fn determine_message_role(role: &str) -> chat_completion::MessageRole {
+        match role {
+            _ if role == ChatGPTRole::User.to_string() => chat_completion::MessageRole::user,
+            _ if role == ChatGPTRole::Assistant.to_string() => {
+                chat_completion::MessageRole::assistant
+            }
+            _ => chat_completion::MessageRole::system,
+        }
+    }
+
+    // Handling image and text content separately for chat_completion messages
+    let pass_vec: Vec<chat_completion::ChatCompletionMessage> = messages
         .iter()
-        .map(|message| {
-            ChatCompletionMessageRequestBuilder::default()
-                .role(ChatGPTRole::User)
-                .content(message.content.clone())
-                .name(message.role.clone())
-                .build()
-                .unwrap()
+        .flat_map(|message| {
+            let role = determine_message_role(&message.role);
+
+            if !base64_data.is_empty() {
+                if role.clone() == chat_completion::MessageRole::user {
+                    vec![chat_completion::ChatCompletionMessage {
+                        role: role.clone(),
+                        content: chat_completion::Content::ImageUrl(vec![
+                            chat_completion::ImageUrl {
+                                r#type: chat_completion::ContentType::text,
+                                text: Some(message.content.clone()),
+                                image_url: None,
+                            },
+                            chat_completion::ImageUrl {
+                                r#type: chat_completion::ContentType::image_url,
+                                text: None,
+                                image_url: Some(chat_completion::ImageUrlType {
+                                    url: base64_data.to_string(),
+                                }),
+                            },
+                        ]),
+                        name: None,
+                    }]
+                } else {
+                    vec![chat_completion::ChatCompletionMessage {
+                        role: role.clone(),
+                        content: chat_completion::Content::Text(message.content.clone()),
+                        name: None,
+                    }]
+                }
+            } else {
+                vec![chat_completion::ChatCompletionMessage {
+                    role: role.clone(),
+                    content: chat_completion::Content::Text(message.content.clone()),
+                    name: None,
+                }]
+            }
         })
         .collect();
 
-    // リクエストボディを作成
-    let req = match CreateChatRequestBuilder::default()
-        .model(set_model.to_string())
-        .stream(true)
-        .messages(pass_vec)
-        .build()
-    {
-        Ok(req) => req,
-        Err(e) => return Err(format!("CreateChatRequestBuilder error: {}", e)),
+    let req = ChatCompletionRequest::new(set_model.to_string(), pass_vec);
+    req.clone().stream(true);
+
+    // // リクエストの確認、プリント
+    // println!("{:?}\n", req);
+
+    let stream = match client.chat_completion(req) {
+        Ok(stream) => stream,
+        Err(e) => return Err(format!("client.chat_completion error: {}", e)),
     };
 
-    // リクエストを送信
-    let mut stream = match client.chat().create_with_stream(&req).await {
-        Ok(stream) => stream,
-        Err(e) => return Err(format!("client.chat().create_with_stream error: {}", e)),
+    // Option(string)から、stringに変換
+    let result: String = match stream.choices[0].message.content {
+        Some(ref content) => content.clone(),
+        None => String::new(),
     };
 
     // VoiceIDの指定を読み込み
-    let mut is_voice: bool;
+    let is_voice: bool;
     let voice_id: i16 = match env::var("VOICEID") {
         Ok(val) => {
             is_voice = true;
@@ -390,54 +558,22 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
             1
         }
     };
-
-    let mut result = String::new();
-    let mut delta = String::new();
-    let mut reason = String::new();
-    while let Some(res) = stream.next().await {
-        let response = match res {
-            Ok(response) => response,
+    // メッセージを発言
+    // 棒読みちゃんが起動していない場合は無視します
+    if is_voice {
+        match mods::voice::say(voice_id, result.as_str()) {
+            Ok(_) => {}
             Err(e) => {
-                return Err(format!("stream.next().await error: {}", e));
+                info!(
+                    "棒読みちゃんが起動していないか、エラーが発生しました: {}",
+                    e
+                );
+                // is_voice = false;
             }
         };
-
-        response.choices.iter().for_each(|choice| {
-            if let Some(ref content) = choice.delta.content {
-                delta.push_str(content);
-            }
-            // 終了理由を取得する
-            reason = match &choice.finish_reason {
-                Some(reason) => reason.clone(),
-                None => String::new(),
-            };
-        });
-
-        // Stop文字を定義し、中途処理を行います
-        if delta.ends_with('.')
-            || delta.ends_with('。')
-            || delta.ends_with('\n')
-            || !reason.is_empty()
-        {
-            result.push_str(&delta);
-            // メッセージを発言
-            // 棒読みちゃんが起動していない場合は無視します
-            if is_voice {
-                match mods::voice::say(voice_id, delta.as_str()) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        info!(
-                            "棒読みちゃんが起動していないか、エラーが発生しました: {}",
-                            e
-                        );
-                        is_voice = false;
-                    }
-                };
-            }
-            // デルタ文字列を初期化
-            delta = String::new();
-        }
     }
+
+    // println!("result: {}", result);
 
     // マークダウン整形
     let markdown_content = convert_markdown_to_html(result.as_str())?;
@@ -449,9 +585,12 @@ async fn gpt_stream_request(b: u8, msg: &str) -> std::result::Result<String, Str
         role: ChatGPTRole::Assistant.to_string(),
         content: result.to_string(),
     };
+
     // メッセージを処理して連結
     let all_messages =
         process_and_concat_messages(new_response).expect("Failed to process and concat messages");
+
+    // println!("markdown_content: {}", markdown_content);
 
     // トークン数・実行時間を算出し、整形する
     Ok(create_response(
@@ -557,7 +696,7 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             is_there_env,
-            gpt_stream_request,
+            gpt_request,
             reset_messages,
             request_system,
             claude_request,
