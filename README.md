@@ -1,9 +1,15 @@
 # Talk with RustGPT
-GUI: Tauri + React + Typescript
+API: Rust only
+GUI: Tauri + React(Typescript).  
+The attached image will only be accepted as a screenshot paste.
 
 Switch API & Models:  
-API: OpenAI ChatGPT
-API: Anthropic Claude
+API: OpenAI ChatGPT with image
+- hight: 4o
+- low: 4o-mini
+API: Anthropic Claude with image
+- hight: 3.5 sonnet
+- low: 3 opus
 
 [Release](https://github.com/go-numb/TalkWithRustGPT/releases)  
 

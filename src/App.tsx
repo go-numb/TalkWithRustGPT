@@ -19,8 +19,8 @@ function App() {
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isUpload, setIsUpload] = useState<boolean>(false);
 
-  const MAX_WIDTH = 512; // 例として800pxに設定
-  const MAX_HEIGHT = 512; // 例として800pxに設定
+  const MAX_WIDTH = 512; // 例として512pxに設定
+  const MAX_HEIGHT = 512; // 例として512pxに設定
 
   const StatusNotSupport = "❌ Browser doesn't support speech recognition."
   const StatusAvailable = "❌ Microphone function is off, access to microphone is required."
@@ -30,8 +30,8 @@ function App() {
   const StatusStop = "🎧 Stoped listening."
   const StatusStart = "🎧 Start listening."
   const StatusThinking = "🤖 Thinking..."
-  const StatusModelLow = "🤖 Switch to model 3.5/sonnet."
-  const StatusModelHigh = "🤖 Switch to model 4.0/opus."
+  const StatusModelLow = "🤖 Switch to model 4mini/3opus."
+  const StatusModelHigh = "🤖 Switch to model 4omni/3.5sonnet."
   const StatusAIChatGPT = "🤖 Switch to ChatGPT."
   const StatusAIClaude = "🤖 Switch to Claude."
   const StatusResetMessages = "📝 Done! reset message history."
@@ -146,9 +146,18 @@ function App() {
     }
     setStatus(StatusThinking);
 
-    invoke("claude_request", { b: model, msg: _msg })
+    let src = "";
+    if (imageUrl && !isUpload) {
+      src = imageUrl;
+      setImageUrls((prev) => [...prev, imageUrl]);
+
+      setIsUpload(true);
+      setImageUrl(null);
+    }
+
+    invoke("claude_request", { b: model, msg: _msg, src: src })
       .then((res: any) => { // Add type annotation to 'res'
-        console.log(res);
+        console.debug(res);
 
         setResult(`${res}`);
       })
@@ -191,7 +200,7 @@ function App() {
       setImageUrl(null);
     }
 
-    invoke("gpt_request", { b: model, msg: _msg, src: src })
+    invoke("chatgpt_request", { b: model, msg: _msg, src: src })
       .then((res) => {
         setResult(`${res}`);
       })
@@ -250,7 +259,7 @@ function App() {
 
   // Usefull functions
   const reset_all_vers = () => {
-    console.log("reset_all_vers");
+    console.debug("reset_all_vers");
 
     resetTranscript();
     setMsg("");
@@ -260,7 +269,7 @@ function App() {
     // 画面のスクロールを最上部に移動
     window.scrollTo(0, 0);
 
-    console.log(msg);
+    console.debug(msg);
 
   }
 
@@ -334,7 +343,7 @@ function App() {
             rows={4}
             onPaste={(e) => {
               // text only
-              // console.log("onPaste" + msg);
+              // console.debug("onPaste" + msg);
 
               // 通常通りのペーストを行う
               setMsg((prev) => prev + e.clipboardData.getData("text"));
@@ -347,16 +356,14 @@ function App() {
               e.preventDefault();
               // upload file
               const files = e.clipboardData.files;
-              // console.log("files: ");
-              console.log(files);
+              // console.debug("files: ");
+              console.debug(files);
 
               // get image file
               const file = files[0];
               if (file) {
                 const base_image = resizeImageAndConvertToBase64(file, MAX_WIDTH, MAX_HEIGHT);
                 base_image.then((base64) => {
-                  console.log(base64);
-
                   setImageUrl(base64);
                   setIsUpload(false);
                 });
@@ -443,8 +450,13 @@ const resizeImageAndConvertToBase64 = (file: File, maxWidth: number, maxHeight: 
 
         canvas.width = newWidth;
         canvas.height = newHeight;
+        console.debug("newWidth: ", newWidth, "newHeight: ", newHeight);
+
+
         ctx.drawImage(img, 0, 0, newWidth, newHeight);
         const dataUrl = canvas.toDataURL('image/png');
+        // console.debug("dataUrl: ", dataUrl);
+
         resolve(dataUrl);
       };
       img.src = event.target!.result as string;
