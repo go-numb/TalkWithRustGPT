@@ -82,7 +82,29 @@ impl Shelf {
             .iter()
             .map(|m| {
                 if m.role == "user" {
-                    format!("{}: {}", m.role, m.content)
+                    // content has image_url, delete it
+                    let mut content = m.content.clone();
+
+                    // Check if the content is an array
+                    if content.is_array() {
+                        // Filter out image_url or image entries
+                        content = Value::Array(
+                            content
+                                .as_array()
+                                .unwrap()
+                                .iter()
+                                .filter(|entry| {
+                                    // Check type and filter out image_url and image
+                                    !entry["type"]
+                                        .as_str()
+                                        .map_or(false, |t| t.starts_with("image"))
+                                })
+                                .cloned()
+                                .collect(),
+                        );
+                    }
+
+                    format!("{}: {}", m.role, content)
                 } else {
                     format!("{}: {}\n----------------", m.role, m.content)
                 }
