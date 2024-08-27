@@ -3325,7 +3325,7 @@ dependencies = [
 
 [[package]]
 name = "talk-with-rust-gpt"
-version = "0.0.8"
+version = "0.1.2"
 dependencies = [
  "base64 0.13.1",
  "bouyomi4rs",
