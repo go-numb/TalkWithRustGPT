@@ -5,23 +5,24 @@
 // // my modules
 mod manage;
 mod sub;
-
-use tauri::State;
-
-use serde_json::json;
-
 use dotenv::dotenv;
-
+use serde_json::json;
+use tauri::State;
 // Logger
 use log::info;
-
+use parking_lot::Mutex as Mut;
 use std::env;
-
 use std::sync::Arc;
 
-use parking_lot::Mutex as Mut;
-
 // const APPNAME: &str = "Talk with RustGPT";
+const MODEL_CLAUDE_HIGH: &str = "claude-3-5-sonnet-20240620";
+const MODEL_CLAUDE_LOW: &str = "claude-3-opus-20240229";
+
+const MODEL_CHATGPT_HIGH: &str = "gpt-4o";
+const MODEL_CHATGPT_LOW: &str = "gpt-4o-mini";
+
+const MODEL_GEMINI_HIGH: &str = "gemini-1.5-pro-exp-0827";
+const MODEL_GEMINI_LOW: &str = "gemini-1.5-flash-exp-0827";
 
 #[tauri::command]
 fn request_system(
@@ -49,9 +50,9 @@ async fn claude_request(
     let start_time = chrono::Local::now();
 
     let (set_model, max_tokens) = if b == 1 {
-        ("claude-3-5-sonnet-20240620", 8192)
+        (MODEL_CLAUDE_HIGH, 8192)
     } else {
-        ("claude-3-opus-20240229", 4096)
+        (MODEL_CLAUDE_LOW, 4096)
     };
 
     // add new request message, and get message history
@@ -166,9 +167,9 @@ async fn chatgpt_request(
     let start_time = chrono::Local::now();
 
     let (set_model, max_tokens) = if b == 1 {
-        ("gpt-4o", 4096)
+        (MODEL_CHATGPT_HIGH, 4096)
     } else {
-        ("gpt-4o-mini", 16384)
+        (MODEL_CHATGPT_LOW, 16384)
     };
 
     // add new request message, and get message history
@@ -263,9 +264,9 @@ async fn gemini_request(
     let start_time = chrono::Local::now();
 
     let (set_model, _max_tokens) = if b == 1 {
-        ("gemini-1.5-pro-exp-0827", 8192)
+        (MODEL_GEMINI_HIGH, 8192)
     } else {
-        ("gemini-1.5-flash-exp-0827", 8192)
+        (MODEL_GEMINI_LOW, 8192)
     };
 
     // add new request message, and get message history
