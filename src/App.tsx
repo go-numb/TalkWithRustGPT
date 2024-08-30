@@ -30,10 +30,11 @@ function App() {
   const StatusStop = "🎧 Stoped listening."
   const StatusStart = "🎧 Start listening."
   const StatusThinking = "🤖 Thinking..."
-  const StatusModelLow = "🤖 Switch to model 4mini/3opus."
-  const StatusModelHigh = "🤖 Switch to model 4omni/3.5sonnet."
+  const StatusModelLow = "🤖 Switch to model 4mini/3opus/flex."
+  const StatusModelHigh = "🤖 Switch to model 4omni/3.5sonnet/pro."
   const StatusAIChatGPT = "🤖 Switch to ChatGPT."
   const StatusAIClaude = "🤖 Switch to Claude."
+  const StatusAIGemini = "🤖 Switch to Gemini."
   const StatusResetMessages = "📝 Done! reset message history."
 
   const {
@@ -51,7 +52,7 @@ function App() {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState("");
   const [model, setModel] = useState<number>(1);
-  const [AI, setAI] = useState<number>(Number);
+  const [AI, setAI] = useState<number>(0);
   const [status, setStatus] = useState(StatusModelHigh);
 
   // 起動時に、環境変数: CHATGPTTOKEN、ANTHROPIC_API_KEYどちらもなければ、setResultにエラーメッセージを表示する
@@ -117,21 +118,13 @@ function App() {
         resetTranscript();
         let reqest = msg.replace(command, "");
         setMsg(reqest);
-        switch_request(reqest);
+        to_request(reqest);
       }
     }
   }, [transcript]);
 
 
-  const switch_request = async (req: string) => {
-    if (AI == 0) {
-      gpt_request(req)
-    } else {
-      claude_request(req)
-    }
-  }
-
-  const claude_request = async (req: string) => {
+  const to_request = async (req: string) => {
     let _msg = msg;
     if (req != "") {
       console.debug("req: ", req);
@@ -155,14 +148,18 @@ function App() {
       setImageUrl(null);
     }
 
-    invoke("claude_request", { b: model, msg: _msg, src: src })
+    const to_invoke = AI === 0 ? "claude_request" : AI === 1 ? "chatgpt_request" : "gemini_request";
+    console.log(`invoke: ${to_invoke}`);
+
+
+    invoke(to_invoke, { b: model, msg: _msg, src: src })
       .then((res: any) => { // Add type annotation to 'res'
         console.debug(res);
 
         setResult(`${res}`);
       })
       .catch((err) => {
-        console.error(`claude_request > ${err}`);
+        console.error(`gemini_request > ${err}`);
 
         setStatus(`error: ${err}`);
       })
@@ -174,49 +171,6 @@ function App() {
         }
       });
   }
-
-  // gpt_request Rust Tauri APIを呼び出す
-  const gpt_request = (req: string) => {
-    let _msg = msg;
-    if (req != "") {
-      console.debug("req: ", req);
-
-      _msg = req;
-    }
-    // console.debug(_msg);
-
-    if (_msg === "") {
-      setResult("Please enter a msg.");
-      return;
-    }
-    setStatus(StatusThinking);
-
-    let src = "";
-    if (imageUrl && !isUpload) {
-      src = imageUrl;
-      setImageUrls((prev) => [...prev, imageUrl]);
-
-      setIsUpload(true);
-      setImageUrl(null);
-    }
-
-    invoke("chatgpt_request", { b: model, msg: _msg, src: src })
-      .then((res) => {
-        setResult(`${res}`);
-      })
-      .catch((err) => {
-        console.error(`gpt_request > ${err}`);
-
-        setStatus(`error: ${err}`);
-      })
-      .finally(() => {
-        reset_all_vers();
-        setQuery(`<h2 class="line_wrap">Q: ${_msg}</h2>\n`);
-        if (!listening) {
-          setStatus(StatusNone);
-        }
-      });
-  };
 
   const reset_messages = () => {
     memo();
@@ -248,13 +202,23 @@ function App() {
   }
 
   const switch_ai = () => {
-    if (AI != 0) {
-      setAI(0);
-      setStatus(StatusAIChatGPT);
-    } else {
-      setAI(1);
-      setStatus(StatusAIClaude);
-    }
+    setAI((prev) => {
+      prev++;
+      if (prev > 2) {
+        prev = 0;
+      }
+      switch (prev) {
+        case 0:
+          setStatus(StatusAIClaude);
+          break;
+        case 1:
+          setStatus(StatusAIChatGPT);
+          break;
+        default:
+          setStatus(StatusAIGemini);
+      }
+      return prev;
+    });
   }
 
   // Usefull functions
@@ -300,6 +264,17 @@ function App() {
     }
   }
 
+  const change_icon = (): string => {
+    switch (AI) {
+      case 0:
+        return "/claude-ai.png";
+      case 1:
+        return "/chatgpt-ai.png";
+      default:
+        return "/gemini-ai.png";
+    };
+  }
+
   return (
     <Flex gap="large" vertical>
       {/* 各ButtonとButtonの間隔を等間隔にし、かつ、最大幅で設置する */}
@@ -313,8 +288,8 @@ function App() {
 
       <Flex gap={'large'} justify="space-between" vertical={false}>
         <Image preview={false} style={{ maxWidth: '128px' }} onClick={reset_messages} src="/delete.png" className="logo reset message" alt="reset message logo" title="reset messages" />
-        <Image preview={false} style={{ maxWidth: '128px' }} onClick={switch_model} src="/switch-model.png" className="logo switch model" alt="switch model logo" title="switch set model" />
-        <Image preview={false} style={{ maxWidth: '128px' }} onClick={switch_ai} src={AI === 0 ? "/chatgpt-ai.png" : "/claude-ai.png"} className="logo switch ai" alt="switch ai logo" title="switch set ai" />
+        <Image preview={false} style={{ maxWidth: '128px' }} onClick={switch_model} src={model === 0 ? "/switch-model-high.png" : "/switch-model-low.png"} className="logo switch model" alt="switch model logo" title="switch set model" />
+        <Image preview={false} style={{ maxWidth: '128px' }} onClick={switch_ai} src={change_icon()} className="logo switch ai" alt="switch ai logo" title="switch set ai" />
         <Image preview={false} style={{ maxWidth: '128px' }} onClick={speech} src="/vc.png" className="logo vc" alt="vc logo" title="start/end vc for message" />
       </Flex>
 
@@ -331,7 +306,7 @@ function App() {
         // style={{ maxWidth: 600 }}
         className="form"
         onFinish={(_) => {
-          switch_request("");
+          to_request("");
         }}
       >
         <Form.Item<Fields>

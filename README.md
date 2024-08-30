@@ -3,13 +3,21 @@ API: Rust only
 GUI: Tauri + React(Typescript).  
 The attached image will only be accepted as a screenshot paste.
 
+Model and AI can be used across the board. Supports launching in multiple windows.
+
 Switch API & Models:  
+
 API: OpenAI ChatGPT with image
 - hight: 4o
-- low: 4o-mini
+- low: 4o-mini  
+
 API: Anthropic Claude with image
 - hight: 3.5 sonnet
 - low: 3 opus
+
+API: Google Gemini with image
+- hight: 1.5 pro
+- low: 1.5 flex
 
 [Release](https://github.com/go-numb/TalkWithRustGPT/releases)  
 
@@ -25,6 +33,7 @@ API: Anthropic Claude with image
 ## Required
 set env CHATGPTTOKEN  
 set env ANTHROPIC_API_KEY  
+set env GOOGLE_GEMINI_API_KEY
 // If you specify the voice_id of the 棒読みちゃん, she will speak.  
 set env VOICEID
 

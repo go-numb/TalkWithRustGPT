@@ -31,13 +31,9 @@ fn request_system(
 
     let mut shelf = state.lock();
 
-    let system_message = json!([{
-        "type": "text",
-        "text": prompt,
-    }]);
     shelf
         .system_messages
-        .add("system".to_string(), system_message);
+        .add("system".to_string(), prompt, None);
 
     Ok("success".to_string())
 }
@@ -57,13 +53,15 @@ async fn claude_request(
         ("claude-3-opus-20240229", 4096)
     };
 
-    // create request content
-    let content = manage::utils::create_content_for_claude(msg, src);
-
     // add new request message, and get message history
     let messages = {
+        let set_src = if src.is_empty() {
+            None
+        } else {
+            Some(src.to_string())
+        };
         let mut mut_shelf = state.lock();
-        mut_shelf.add_to_messages("user".to_string(), content);
+        mut_shelf.add_to_messages("user".to_string(), msg.to_string(), set_src);
 
         let guard_shelf = mut_shelf.clone();
         guard_shelf.get_messages()
@@ -77,8 +75,7 @@ async fn claude_request(
         if !system_prompt.is_empty() {
             // 最期の配列をStringで出力
             let prompt = system_prompt.last().unwrap();
-            let prompt_text = prompt.content["text"].as_str().unwrap_or("");
-            prompt_text.to_string()
+            prompt.content.to_string()
         } else {
             "".to_string()
         }
@@ -89,14 +86,26 @@ async fn claude_request(
         json!({
             "model": set_model,
             "max_tokens": max_tokens,
-            "messages": messages,
+            "messages":
+                messages.iter().map(|m| {
+                    json!({
+                        "role": m.role,
+                        "content": manage::claude::to_content(m.clone())
+                    })
+                }).collect::<Vec<_>>(),
         })
     } else {
         json!({
             "model": set_model,
             "max_tokens": max_tokens,
-            "messages": messages,
             "system": system_prompt,
+            "messages":
+            messages.iter().map(|m| {
+                json!({
+                    "role": m.role,
+                    "content": manage::claude::to_content(m.clone())
+                })
+            }).collect::<Vec<_>>(),
         })
     };
     let res = match manage::claude::request(body).await {
@@ -111,12 +120,9 @@ async fn claude_request(
     };
 
     // メッセージを履歴に追加
-    // create request content
-    let result_content = manage::utils::create_content_for_claude(&text, "");
-
     let history_messages = {
         let mut mut_shelf = state.lock();
-        mut_shelf.add_to_messages("assistant".to_string(), result_content);
+        mut_shelf.add_to_messages("assistant".to_string(), text.clone(), None);
         let guard_shelf = mut_shelf.clone();
         guard_shelf.get_messages()
     };
@@ -130,12 +136,7 @@ async fn claude_request(
 
     let all_messages_string = history_messages
         .iter()
-        .map(|message| {
-            message.content[0]["text"]
-                .as_str()
-                .unwrap_or("none")
-                .to_string()
-        })
+        .map(|message| message.content.to_string())
         .collect::<String>();
 
     // VoiceIDの指定を読み込み
@@ -169,19 +170,21 @@ async fn chatgpt_request(
         ("gpt-4o-mini", 16384)
     };
 
-    // create request content
-    let content = manage::utils::create_content_for_chatgpt(msg, src);
-
     // add new request message, and get message history
     let mut messages = {
+        let set_src = if src.is_empty() {
+            None
+        } else {
+            Some(src.to_string())
+        };
         let mut mut_shelf = state.lock();
-        mut_shelf.add_to_messages("user".to_string(), content);
+        mut_shelf.add_to_messages("user".to_string(), msg.to_string(), set_src);
 
         let guard_shelf = mut_shelf.clone();
         guard_shelf.get_messages()
     };
 
-    // get system prompt
+    // system prompt append messages
     let messages = {
         let mut_shelf = state.lock();
         let system_prompt = mut_shelf.system_messages.get();
@@ -195,7 +198,12 @@ async fn chatgpt_request(
     let body = json!({
         "model": set_model,
         "max_tokens": max_tokens,
-        "messages": messages,
+        "messages": messages.iter().map(|m| {
+            json!({
+                "role": m.role,
+                "content": manage::chatgpt::to_content(m.clone())
+            })
+        }).collect::<Vec<_>>(),
     });
     let res = match manage::chatgpt::request(body).await {
         Ok(res) => res,
@@ -209,12 +217,9 @@ async fn chatgpt_request(
     };
 
     // メッセージを履歴に追加
-    // create request content
-    let result_content = manage::utils::create_content_for_chatgpt(&text, "");
-
     let history_messages = {
         let mut mut_shelf = state.lock();
-        mut_shelf.add_to_messages("assistant".to_string(), result_content);
+        mut_shelf.add_to_messages("assistant".to_string(), text.clone(), None);
         let guard_shelf = mut_shelf.clone();
         guard_shelf.get_messages()
     };
@@ -228,12 +233,126 @@ async fn chatgpt_request(
 
     let all_messages_string = history_messages
         .iter()
-        .map(|message| {
-            message.content[0]["text"]
-                .as_str()
-                .unwrap_or("none")
-                .to_string()
+        .map(|message| message.content.to_string())
+        .collect::<String>();
+
+    // VoiceIDの指定を読み込み
+    manage::utils::say(text.to_string());
+
+    // マークダウン整形
+    let markdown_content = manage::utils::convert_markdown_to_html(text.as_str())?;
+
+    // トークン数・実行時間を算出し、整形する
+    Ok(manage::utils::create_response(
+        markdown_content.as_str(),
+        set_model,
+        all_messages_string.as_str(),
+        src,
+        start_time,
+    ))
+}
+
+#[tauri::command]
+async fn gemini_request(
+    b: u8,
+    msg: &str,
+    src: &str,
+    state: State<'_, Arc<Mut<manage::message::Shelf>>>,
+) -> Result<String, String> {
+    let start_time = chrono::Local::now();
+
+    let (set_model, _max_tokens) = if b == 1 {
+        ("gemini-1.5-pro-exp-0827", 8192)
+    } else {
+        ("gemini-1.5-flash-exp-0827", 8192)
+    };
+
+    // add new request message, and get message history
+    let messages = {
+        let set_src = if src.is_empty() {
+            None
+        } else {
+            Some(src.to_string())
+        };
+        let mut mut_shelf = state.lock();
+        mut_shelf.add_to_messages("user".to_string(), msg.to_string(), set_src);
+
+        let guard_shelf = mut_shelf.clone();
+        guard_shelf.get_messages()
+    };
+
+    // get system prompt
+    // meke simple string for claude
+    let system_prompt = {
+        let mut_shelf = state.lock();
+        let system_prompt = mut_shelf.system_messages.get();
+        if !system_prompt.is_empty() {
+            // 最期の配列をStringで出力
+            let prompt = system_prompt.last().unwrap();
+            prompt.content.to_string()
+        } else {
+            "".to_string()
+        }
+    };
+
+    // request
+    let body = if system_prompt.is_empty() {
+        json!({
+            "contents": messages.iter().map(|m| {
+                json!({
+                    // roleがuserの場合はuser、それ以外はmodel as assistant
+                    "role": if m.role == "user" { "user" } else { "model" },
+                    "parts": manage::gemini::to_content(m.clone()),
+                })
+            }).collect::<Vec<_>>(),
         })
+    } else {
+        // println!("systemInstruction: {}", system_prompt);
+        json!({
+            "systemInstruction": {
+                "parts": [
+                    {
+                        "text": system_prompt,
+                    }
+                ],
+            },
+            "contents": messages.iter().map(|m| {
+                json!({
+                    "role": if m.role == "user" { "user" } else { "model" },
+                    "parts": manage::gemini::to_content(m.clone()),
+                })
+            }).collect::<Vec<_>>(),
+        })
+    };
+    let res = match manage::gemini::request(set_model, body).await {
+        Ok(res) => res,
+        Err(e) => return Err(format!("Request error: {}", e)),
+    };
+
+    // get response message
+    let text = match manage::utils::get_content_for_gemini(&res) {
+        Ok(text) => text,
+        Err(e) => format!("Error: {}", e),
+    };
+
+    // メッセージを履歴に追加
+    let history_messages = {
+        let mut mut_shelf = state.lock();
+        mut_shelf.add_to_messages("assistant".to_string(), text.clone(), None);
+        let guard_shelf = mut_shelf.clone();
+        guard_shelf.get_messages()
+    };
+
+    // for (index, message) in history_messages.iter().enumerate() {
+    //     println!(
+    //         "{} - role: {}, content: {}",
+    //         index, message.role, message.content
+    //     );
+    // }
+
+    let all_messages_string = history_messages
+        .iter()
+        .map(|message| message.content.to_string())
         .collect::<String>();
 
     // VoiceIDの指定を読み込み
@@ -267,6 +386,7 @@ fn main() {
             request_system,
             claude_request,
             chatgpt_request,
+            gemini_request,
             memo
         ])
         .on_window_event(move |event| {

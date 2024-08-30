@@ -41,12 +41,12 @@ impl Shelf {
         self.messages.get()
     }
 
-    pub fn add_to_messages(&mut self, role: String, content: Value) {
-        self.messages.add(role, content);
+    pub fn add_to_messages(&mut self, role: String, content: String, src: Option<String>) {
+        self.messages.add(role, content, src);
     }
 
-    pub fn add_to_system(&mut self, prompt: Value) {
-        self.system_messages.add("system".to_string(), prompt);
+    pub fn add_to_system(&mut self, prompt: String) {
+        self.system_messages.add("system".to_string(), prompt, None);
     }
 
     pub fn reset(&mut self) -> Result<(), String> {
@@ -82,29 +82,8 @@ impl Shelf {
             .iter()
             .map(|m| {
                 if m.role == "user" {
-                    // content has image_url, delete it
-                    let mut content = m.content.clone();
-
-                    // Check if the content is an array
-                    if content.is_array() {
-                        // Filter out image_url or image entries
-                        content = Value::Array(
-                            content
-                                .as_array()
-                                .unwrap()
-                                .iter()
-                                .filter(|entry| {
-                                    // Check type and filter out image_url and image
-                                    !entry["type"]
-                                        .as_str()
-                                        .map_or(false, |t| t.starts_with("image"))
-                                })
-                                .cloned()
-                                .collect(),
-                        );
-                    }
-
-                    format!("{}: {}", m.role, content)
+                    // content has image_url, delete it;
+                    format!("{}: {}", m.role, m.content.clone())
                 } else {
                     format!("{}: {}\n----------------", m.role, m.content)
                 }
@@ -135,8 +114,12 @@ pub struct Messages {
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Message {
+    // who is speaking
     pub role: String,
-    pub content: Value,
+    // what is said
+    pub content: String,
+    // image/file base64 source data
+    pub src: Option<String>,
 }
 
 impl Messages {
@@ -146,8 +129,8 @@ impl Messages {
         }
     }
 
-    pub fn add(&mut self, role: String, content: Value) {
-        let message = Message { role, content };
+    pub fn add(&mut self, role: String, content: String, src: Option<String>) {
+        let message = Message { role, content, src };
         self.messages.push(message);
     }
 

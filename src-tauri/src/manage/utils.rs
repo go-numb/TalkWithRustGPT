@@ -2,6 +2,7 @@ use dotenv::dotenv;
 use serde_json::Value;
 use std::env;
 use std::error::Error;
+use std::path::Path;
 use std::result::Result;
 
 use chrono::prelude::*;
@@ -17,6 +18,7 @@ use crate::sub;
 pub struct Keys {
     pub anthropic_key: String,
     pub openai_token: String,
+    pub google_key: String,
     pub voice_id: i16,
 }
 
@@ -25,13 +27,32 @@ pub async fn get_env() -> Result<Keys, Box<dyn Error>> {
     dotenv().ok();
     let anthropic_key = env::var("ANTHROPIC_API_KEY")?;
     let openai_token = env::var("CHATGPTTOKEN")?;
+    let google_key = env::var("GOOGLE_GEMINI_API_KEY")?;
     let voice_id = env::var("VOICEID")?.parse()?;
 
     Ok(Keys {
         anthropic_key,
         openai_token,
+        google_key,
         voice_id,
     })
+}
+
+pub fn get_file_type_by_extension(file_path: &str) -> Option<&str> {
+    let path = Path::new(file_path);
+    match path.extension()?.to_str()? {
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "png" => Some("image/png"),
+        "webp" => Some("image/webp"),
+        "gif" => Some("image/gif"),
+        "mp4" => Some("video/mp4"),
+        "txt" => Some("text/plain"),
+        "json" => Some("application/json"),
+        "csv" => Some("text/csv"),
+        "pdf" => Some("application/pdf"),
+        // 他の拡張子の処理...
+        _ => None,
+    }
 }
 
 pub fn get_content_for_chatgpt(v: &Value) -> Result<String, String> {
@@ -67,6 +88,32 @@ pub fn get_content_for_claude(v: &Value) -> Result<String, String> {
     Ok(text.to_string())
 }
 
+pub fn get_content_for_gemini(v: &Value) -> Result<String, String> {
+    // part.textを取得
+    // 'part.text'を取得
+    // println!("v: {:?}", v);
+    // 値を一度に確認して、unwrapするときにエラーメッセージを指定します
+    let result = v
+        .get("candidates")
+        .and_then(|candidates| candidates.get(0))
+        .and_then(|first_candidate| first_candidate.get("content"))
+        .and_then(|content| content.get("parts"))
+        .and_then(|parts| parts.get(0))
+        .and_then(|first_part| first_part.get("text"))
+        .ok_or(format!(
+            "part.text not found or not a string, error: {:?}",
+            v
+        ))?;
+
+    let result = result
+        .as_str()
+        .expect("part.text is not a string")
+        .to_string();
+
+    // 値が見つかった場合は、文字列に変換して返します
+    Ok(result)
+}
+
 /// AIが出力したマークダウン用テキストをHTML出力する
 pub fn convert_markdown_to_html(text: &str) -> Result<String, String> {
     markdown::to_html_with_options(text, &markdown::Options::gfm())
@@ -92,49 +139,6 @@ pub fn create_response(
         end.signed_duration_since(start).num_seconds(),
     );
     msg
-}
-
-pub fn create_content_for_chatgpt(msg: &str, src: &str) -> Value {
-    if src.is_empty() {
-        json!([{"type": "text", "text": msg}])
-    } else {
-        json!([
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": src,
-                },
-            },
-            {"type": "text", "text": msg}
-        ])
-    }
-}
-
-pub fn create_content_for_claude(msg: &str, src: &str) -> Value {
-    if src.is_empty() {
-        json!([{"type": "text", "text": msg}])
-    } else {
-        let media_type = if src.contains("data:image/png") {
-            "image/png"
-        } else {
-            "image/jpeg"
-        };
-        // remove "data:image/png;base64,"
-        let src = src.replace("data:image/png;base64,", "");
-        let src = src.replace("data:image/jpeg;base64,", "");
-
-        json!([
-            {
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": media_type,
-                    "data": src
-                }
-            },
-            {"type": "text", "text": msg}
-        ])
-    }
 }
 
 pub fn say(msg: String) -> bool {

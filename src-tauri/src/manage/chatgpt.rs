@@ -1,7 +1,25 @@
+use crate::manage::message::Message;
+
 use super::utils::get_env;
 use reqwest::Client;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::result::Result;
+
+pub fn to_content(message: Message) -> Value {
+    if message.src.is_none() {
+        json!([{"type": "text", "text": message.content }])
+    } else {
+        json!([
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": message.src.unwrap(),
+                },
+            },
+            {"type": "text", "text": message.content},
+        ])
+    }
+}
 
 pub async fn request(body: Value) -> Result<Value, String> {
     let keys = get_env().await.unwrap();
