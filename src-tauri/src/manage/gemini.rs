@@ -32,7 +32,6 @@ pub fn to_content(message: Message) -> Value {
 }
 pub async fn request(model: &str, body: Value) -> Result<Value, String> {
     let keys = get_env().await.unwrap();
-    // keys.google_key = "AIzaSyBm9_EEh5AhaYVt3PcEfoeCyJuj8IYl3-o".to_string();
     // println!("keys: {:?}", keys);
 
     let url = format!(

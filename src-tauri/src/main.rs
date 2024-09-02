@@ -415,6 +415,13 @@ fn is_there_env() -> bool {
 #[tauri::command]
 fn memo(state: State<'_, Arc<Mut<manage::message::Shelf>>>) -> String {
     let shelf = state.lock();
+
+    // if memo has messages
+    let messages = shelf.get_messages();
+    if messages.is_empty() {
+        return "no messages".to_string();
+    }
+
     match shelf.memo() {
         Ok(_) => "memo is success".to_string(),
         Err(e) => format!("memo error: {}", e),
@@ -422,9 +429,19 @@ fn memo(state: State<'_, Arc<Mut<manage::message::Shelf>>>) -> String {
 }
 
 fn memo_for_ended(state: Arc<Mut<manage::message::Shelf>>) -> String {
-    let shelf = state.lock();
+    let mut shelf = state.lock();
+
+    // if memo has messages
+    let messages = shelf.get_messages();
+    if messages.is_empty() {
+        return "no messages".to_string();
+    }
+
     match shelf.memo() {
-        Ok(_) => "memo is success".to_string(),
+        Ok(_) => {
+            shelf.reset().unwrap();
+            "memo is success".to_string()
+        }
         Err(e) => format!("memo error: {}", e),
     }
 }
