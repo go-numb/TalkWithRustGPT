@@ -49,6 +49,23 @@ async fn claude_request(
 ) -> Result<String, String> {
     let start_time = chrono::Local::now();
 
+    match manage::command::find_command(msg) {
+        Ok(command) => match command {
+            manage::command::TypeCommand::AllMessages => {
+                let mut shelf = state.lock();
+                let messages = shelf.get_messages();
+                let all_messages_string = messages
+                    .iter()
+                    .map(|message| message.content.to_string())
+                    .collect::<String>();
+                return Ok(all_messages_string);
+            }
+        },
+        Err(_) => {
+            println!("Not found command, through to command function");
+        }
+    }
+
     let (set_model, max_tokens) = if b == 1 {
         (MODEL_CLAUDE_HIGH, 8192)
     } else {
@@ -166,6 +183,23 @@ async fn chatgpt_request(
 ) -> Result<String, String> {
     let start_time = chrono::Local::now();
 
+    match manage::command::find_command(msg) {
+        Ok(command) => match command {
+            manage::command::TypeCommand::AllMessages => {
+                let mut shelf = state.lock();
+                let messages = shelf.get_messages();
+                let all_messages_string = messages
+                    .iter()
+                    .map(|message| message.content.to_string())
+                    .collect::<String>();
+                return Ok(all_messages_string);
+            }
+        },
+        Err(_) => {
+            println!("Not found command, through to command function");
+        }
+    }
+
     let (set_model, max_tokens) = if b == 1 {
         (MODEL_CHATGPT_HIGH, 4096)
     } else {
@@ -262,6 +296,23 @@ async fn gemini_request(
     state: State<'_, Arc<Mut<manage::message::Shelf>>>,
 ) -> Result<String, String> {
     let start_time = chrono::Local::now();
+
+    match manage::command::find_command(msg) {
+        Ok(command) => match command {
+            manage::command::TypeCommand::AllMessages => {
+                let mut shelf = state.lock();
+                let messages = shelf.get_messages();
+                let all_messages_string = messages
+                    .iter()
+                    .map(|message| message.content.to_string())
+                    .collect::<String>();
+                return Ok(all_messages_string);
+            }
+        },
+        Err(_) => {
+            println!("Not found command, through to command function");
+        }
+    }
 
     let (set_model, _max_tokens) = if b == 1 {
         (MODEL_GEMINI_HIGH, 8192)
