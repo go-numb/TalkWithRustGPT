@@ -29,6 +29,7 @@ API: Google Gemini with image
 - [x] reset_messages -> memo, window close -> memo.
 - [x] input voice, output voice
 - [x] voice commands ["教えて", "送信", "エンター"]
+- [x] get command for all messages
 
 ## Required
 set env CHATGPTTOKEN  
