@@ -174,7 +174,7 @@ function App() {
 
   const reset_messages = () => {
     memo();
-    invoke("reset_messages");
+    invoke("reset");
     setImageUrls([]);
     setStatus(StatusResetMessages);
   };
