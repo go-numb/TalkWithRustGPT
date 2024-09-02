@@ -7,6 +7,7 @@ const PREFIX: &str = "/";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TypeCommand {
+    Disenable,   // コマンド否定
     AllMessages, // すべてのメッセージ履歴を取得
 }
 
@@ -36,11 +37,12 @@ pub fn to_command(s: &str) -> TypeCommand {
 
     match command {
         "all" => TypeCommand::AllMessages,
-        _ => TypeCommand::AllMessages,
+        _ => TypeCommand::Disenable,
     }
 }
 
 // 独自コマンドを文字列から抽出する
+// containsメソッドを使って、文字列に特定の文字列が含まれているかを判定する
 pub fn find_command(s: &str) -> Result<TypeCommand, CommandError> {
     let commands = TypeCommand::vars();
 

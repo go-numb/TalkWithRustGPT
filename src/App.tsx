@@ -123,6 +123,25 @@ function App() {
     }
   }, [transcript]);
 
+  const get_all_messages = () => {
+    invoke("all_messages")
+      .then((res) => {
+        console.debug(res);
+        setResult(`${res}`);
+      })
+      .catch((err) => {
+        console.error(`get_all_messages > ${err}`);
+
+        setStatus(`error: ${err}`);
+      })
+      .finally(() => {
+        reset_all_vers();
+        setQuery(`<h2 class="line_wrap">historical messages: </h2>\n`);
+        if (!listening) {
+          setStatus(StatusNone);
+        }
+      });
+  }
 
   const to_request = async (req: string) => {
     let _msg = msg;
@@ -138,6 +157,12 @@ function App() {
       return;
     }
     setStatus(StatusThinking);
+
+    // コマンドの処理
+    if (_msg === "/all") {
+      get_all_messages();
+      return;
+    }
 
     let src = "";
     if (imageUrl && !isUpload) {
@@ -287,7 +312,7 @@ function App() {
       </Flex>
 
       <Flex gap={'large'} justify="space-between" vertical={false}>
-        <Image preview={false} style={{ maxWidth: '128px' }} onClick={reset_messages} src="/delete.png" className="logo reset message" alt="reset message logo" title="reset messages" />
+        <Image preview={false} style={{ maxWidth: '128px' }} onClick={reset_messages} src="/delete.png" className="logo reset message" alt="reset message logo" title="reset messages & save to file" />
         <Image preview={false} style={{ maxWidth: '128px' }} onClick={switch_model} src={model === 0 ? "/switch-model-high.png" : "/switch-model-low.png"} className="logo switch model" alt="switch model logo" title="switch set model" />
         <Image preview={false} style={{ maxWidth: '128px' }} onClick={switch_ai} src={change_icon()} className="logo switch ai" alt="switch ai logo" title="switch set ai" />
         <Image preview={false} style={{ maxWidth: '128px' }} onClick={speech} src="/vc.png" className="logo vc" alt="vc logo" title="start/end vc for message" />

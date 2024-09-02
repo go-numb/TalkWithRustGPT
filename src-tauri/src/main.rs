@@ -6,6 +6,7 @@
 mod manage;
 mod sub;
 use dotenv::dotenv;
+use markdown::message;
 use serde_json::json;
 use tauri::State;
 // Logger
@@ -25,22 +26,6 @@ const MODEL_GEMINI_HIGH: &str = "gemini-1.5-pro-exp-0827";
 const MODEL_GEMINI_LOW: &str = "gemini-1.5-flash-exp-0827";
 
 #[tauri::command]
-fn request_system(
-    num: u8,
-    state: State<'_, Arc<Mut<manage::message::Shelf>>>,
-) -> Result<String, String> {
-    let prompt: String = sub::prompts::choose(num);
-
-    let mut shelf = state.lock();
-
-    shelf
-        .system_messages
-        .add("system".to_string(), prompt, None);
-
-    Ok("success".to_string())
-}
-
-#[tauri::command]
 async fn claude_request(
     b: u8,
     msg: &str,
@@ -48,23 +33,6 @@ async fn claude_request(
     state: State<'_, Arc<Mut<manage::message::Shelf>>>,
 ) -> Result<String, String> {
     let start_time = chrono::Local::now();
-
-    match manage::command::find_command(msg) {
-        Ok(command) => match command {
-            manage::command::TypeCommand::AllMessages => {
-                let mut shelf = state.lock();
-                let messages = shelf.get_messages();
-                let all_messages_string = messages
-                    .iter()
-                    .map(|message| message.content.to_string())
-                    .collect::<String>();
-                return Ok(all_messages_string);
-            }
-        },
-        Err(_) => {
-            println!("Not found command, through to command function");
-        }
-    }
 
     let (set_model, max_tokens) = if b == 1 {
         (MODEL_CLAUDE_HIGH, 8192)
@@ -183,23 +151,6 @@ async fn chatgpt_request(
 ) -> Result<String, String> {
     let start_time = chrono::Local::now();
 
-    match manage::command::find_command(msg) {
-        Ok(command) => match command {
-            manage::command::TypeCommand::AllMessages => {
-                let mut shelf = state.lock();
-                let messages = shelf.get_messages();
-                let all_messages_string = messages
-                    .iter()
-                    .map(|message| message.content.to_string())
-                    .collect::<String>();
-                return Ok(all_messages_string);
-            }
-        },
-        Err(_) => {
-            println!("Not found command, through to command function");
-        }
-    }
-
     let (set_model, max_tokens) = if b == 1 {
         (MODEL_CHATGPT_HIGH, 4096)
     } else {
@@ -296,23 +247,6 @@ async fn gemini_request(
     state: State<'_, Arc<Mut<manage::message::Shelf>>>,
 ) -> Result<String, String> {
     let start_time = chrono::Local::now();
-
-    match manage::command::find_command(msg) {
-        Ok(command) => match command {
-            manage::command::TypeCommand::AllMessages => {
-                let mut shelf = state.lock();
-                let messages = shelf.get_messages();
-                let all_messages_string = messages
-                    .iter()
-                    .map(|message| message.content.to_string())
-                    .collect::<String>();
-                return Ok(all_messages_string);
-            }
-        },
-        Err(_) => {
-            println!("Not found command, through to command function");
-        }
-    }
 
     let (set_model, _max_tokens) = if b == 1 {
         (MODEL_GEMINI_HIGH, 8192)
@@ -440,7 +374,8 @@ fn main() {
             claude_request,
             chatgpt_request,
             gemini_request,
-            memo
+            memo,
+            all_messages
         ])
         .on_window_event(move |event| {
             if let tauri::WindowEvent::Destroyed = event.event() {
@@ -504,4 +439,47 @@ fn reset(state: State<'_, Arc<Mut<manage::message::Shelf>>>) -> String {
         Ok(_) => "success reset messages".to_string(),
         Err(e) => format!("messages reset error: {}", e),
     }
+}
+
+#[tauri::command]
+fn request_system(
+    num: u8,
+    state: State<'_, Arc<Mut<manage::message::Shelf>>>,
+) -> Result<String, String> {
+    let prompt: String = sub::prompts::choose(num);
+
+    let mut shelf = state.lock();
+
+    shelf
+        .system_messages
+        .add("system".to_string(), prompt, None);
+
+    Ok("success".to_string())
+}
+
+#[tauri::command]
+async fn all_messages(
+    state: State<'_, Arc<Mut<manage::message::Shelf>>>,
+) -> Result<String, String> {
+    let shelf = state.lock();
+    let messages = shelf.get_messages();
+
+    if messages.is_empty() {
+        return Err("no message history".to_string());
+    }
+
+    let all_messages_string = messages
+        .iter()
+        .map(|message| {
+            if message.role == "user" {
+                format!("{}: {}\n\n", message.role, message.content)
+            } else {
+                format!(
+                    "{}: {}\n--------------------\n\n",
+                    message.role, message.content
+                )
+            }
+        })
+        .collect::<String>();
+    Ok(all_messages_string)
 }
