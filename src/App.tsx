@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import "./App.css";
 import { Flex, Space, Row, Col, Button, Image, Form, Input, } from "antd";
@@ -55,6 +55,8 @@ function App() {
   const [AI, setAI] = useState<number>(0);
   const [status, setStatus] = useState(StatusModelHigh);
 
+  const inputRef = useRef<HTMLInputElement>(null);
+
   // 起動時に、環境変数: CHATGPTTOKEN、ANTHROPIC_API_KEYどちらもなければ、setResultにエラーメッセージを表示する
   const init_check = async () => {
     const isEnvAvailable = await invoke("is_there_env");
@@ -62,6 +64,8 @@ function App() {
       setResult(`[ALERT]ご利用できません: 各AIサービスを利用するための環境変数: CHATGPTTOKENまたは ANTHROPIC_API_KEYを設定してください。`);
     }
   };
+
+
   useEffect(() => {
     // ReferenceError: process is not defined
     init_check();
@@ -194,6 +198,8 @@ function App() {
         if (!listening) {
           setStatus(StatusNone);
         }
+
+        // 
       });
   }
 
@@ -257,6 +263,8 @@ function App() {
 
     // 画面のスクロールを最上部に移動
     window.scrollTo(0, 0);
+    // カーソルをtextareaに移動
+    inputRef.current?.focus();
 
     console.debug(msg);
 
@@ -339,6 +347,7 @@ function App() {
           wrapperCol={{ span: 24 }}
         >
           <TextArea
+            ref={inputRef}
             value={msg}
             rows={4}
             onPaste={(e) => {
