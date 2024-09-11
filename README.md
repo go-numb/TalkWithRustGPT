@@ -30,11 +30,12 @@ API: Google Gemini with image
 - [x] input voice, output voice
 - [x] voice commands ["教えて", "送信", "エンター"]
 - [x] get command for all messages
+- [x] command matome & save
 
 ## Required
 set env CHATGPTTOKEN  
 set env ANTHROPIC_API_KEY  
-set env GOOGLE_GEMINI_API_KEY
+set env GOOGLE_GEMINI_API_KEY  
 // If you specify the voice_id of the 棒読みちゃん, she will speak.  
 set env VOICEID
 

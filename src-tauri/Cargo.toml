@@ -1,6 +1,6 @@
 [package]
 name = "talk-with-rust-gpt"
-version = "0.1.5"
+version = "0.1.6"
 description = "Talk With Rust GPT"
 authors = ["_numbP"]
 licence = "MIT OR Apache-2.0"

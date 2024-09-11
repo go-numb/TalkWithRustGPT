@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import "./App.css";
-import { Flex, Space, Row, Col, Button, Image, Form, Input, } from "antd";
+import { Flex, Space, Row, Col, Button, Image, Form, Input, message, } from "antd";
 const { TextArea } = Input;
+
+import { prompts } from "./components/prompts";
 
 // Voice API
 import "regenerator-runtime/runtime";
@@ -297,6 +299,21 @@ function App() {
     }
   }
 
+  const set_prompt = (num: number) => {
+    return () => {
+      switch (num) {
+        case 1:
+          to_request(prompts.matome);
+          break;
+        case 2:
+          to_request(prompts.save);
+          break;
+        default:
+          message.error("error: undefined prompt");
+      }
+    }
+  }
+
   const change_icon = (): string => {
     switch (AI) {
       case 0:
@@ -312,12 +329,15 @@ function App() {
     <Flex gap="large" vertical>
       {/* 各ButtonとButtonの間隔を等間隔にし、かつ、最大幅で設置する */}
       <Flex gap={'large'} justify="space-between">
-        <Button size="large" onClick={request_system(1)} title="厳格で正確な">&#x1f9d0;</Button>
-        <Button size="large" onClick={request_system(2)} title="フレンドリーな">&#x1fae0;</Button>
-        <Button size="large" onClick={request_system(3)} title="肯定的な">&#x1f973;</Button>
-        <Button size="large" onClick={request_system(4)} title="批判的な">&#x1f608;</Button>
-        <Button size="large" onClick={request_system(0)} title="無指示">&#x1fae5;</Button>
+        <Button size="small" onClick={request_system(1)} title="厳格で正確な">&#x1f9d0;</Button>
+        <Button size="small" onClick={request_system(2)} title="フレンドリーな">&#x1fae0;</Button>
+        <Button size="small" onClick={request_system(3)} title="肯定的な">&#x1f973;</Button>
+        <Button size="small" onClick={request_system(4)} title="批判的な">&#x1f608;</Button>
+        <Button size="small" onClick={request_system(0)} title="無指示">&#x1fae5;</Button>
+        <Button size="small" onClick={set_prompt(1)} title="まとめ">&#x1f9d0;</Button>
+        <Button size="small" onClick={set_prompt(2)} title="保存">&#x1f910;</Button>
       </Flex>
+
 
       <Flex gap={'large'} justify="space-between" vertical={false}>
         <Image preview={false} style={{ maxWidth: '128px' }} onClick={reset_messages} src="/delete.png" className="logo reset message" alt="reset message logo" title="reset messages & save to file" />
