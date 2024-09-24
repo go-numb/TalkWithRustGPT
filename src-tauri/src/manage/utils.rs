@@ -70,6 +70,28 @@ pub fn get_content_for_chatgpt(v: &Value) -> Result<String, String> {
         .to_string())
 }
 
+pub fn get_content_for_chatgpt_dell3(v: &Value) -> Result<(String, String), String> {
+    // get choices[0].message.content to string
+    let data = v["data"].as_array().ok_or("data not found")?;
+
+    // check if data is empty
+    if data.is_empty() {
+        return Err("choices is empty".to_string());
+    }
+
+    let prompt = data[0]["revised_prompt"]
+        .as_str()
+        .ok_or("prompt not found or not a string")?
+        .to_string();
+
+    let url = data[0]["url"]
+        .as_str()
+        .ok_or("url not found or not a string")?
+        .to_string();
+
+    Ok((prompt, url))
+}
+
 pub fn get_content_for_claude(v: &Value) -> Result<String, String> {
     // Get content[0].text as a string
     // Get the content array
@@ -241,5 +263,33 @@ mod tests {
         };
 
         assert_eq!(content, "\n\nHello there, how may I assist you today?");
+    }
+
+    #[test]
+    fn test_get_content_for_chatgpt_dell3() {
+        let v: Value = match serde_json::from_str(
+            r#"{"created":1727198587,"data":[{"revised_prompt":"Visualize a cute, small domestic cat with bright green eyes. It has a soft, fluffy coat, which is a blend of white and ginger colors. The cat is seated comfortably in a cozy, charming setting, perhaps on a soft carpet or by a small warm fireplace. It looks quite content and appears to be purring softly, and the light from the fireplace casts warm, dancing shadows around the room.","url":"https://oaidalleapiprodscus.blob.core.windows.net/private/org-kHS4P2uzP7F6H7Sv9IkJtK5x/user-uxA7ibEcqpioj7QFJFaRzKF1/img-uHR0LPYIEMf8NVDKQjSMSaoB.png?st=2024-09-24T16%3A23%3A07Z&se=2024-09-24T18%3A23%3A07Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=d505667d-d6c1-4a0a-bac7-5c84a87759f8&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2024-09-23T23%3A19%3A20Z&ske=2024-09-24T23%3A19%3A20Z&sks=b&skv=2024-08-04&sig=5FUWINIWzfLKDYS99GgcMiysHP96TPIawJVW4HyUPe8%3D"}]}"#,
+        ) {
+            Ok(v) => v,
+            Err(e) => panic!("Failed to parse JSON: {}", e),
+        };
+        assert!(v.is_object());
+
+        let (prompt, url) = match get_content_for_chatgpt_dell3(&v) {
+            Ok((prompt, url)) => (prompt, url),
+            Err(e) => panic!("Failed to get content: {}", e),
+        };
+
+        println!("prompt: {}", prompt);
+        println!("url: {}", url);
+
+        assert_eq!(
+            prompt,
+            "Visualize a cute, small domestic cat with bright green eyes. It has a soft, fluffy coat, which is a blend of white and ginger colors. The cat is seated comfortably in a cozy, charming setting, perhaps on a soft carpet or by a small warm fireplace. It looks quite content and appears to be purring softly, and the light from the fireplace casts warm, dancing shadows around the room."
+        );
+        assert_eq!(
+            url,
+            "https://oaidalleapiprodscus.blob.core.windows.net/private/org-kHS4P2uzP7F6H7Sv9IkJtK5x/user-uxA7ibEcqpioj7QFJFaRzKF1/img-uHR0LPYIEMf8NVDKQjSMSaoB.png?st=2024-09-24T16%3A23%3A07Z&se=2024-09-24T18%3A23%3A07Z&sp=r&sv=2024-08-04&sr=b&rscd=inline&rsct=image/png&skoid=d505667d-d6c1-4a0a-bac7-5c84a87759f8&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2024-09-23T23%3A19%3A20Z&ske=2024-09-24T23%3A19%3A20Z&sks=b&skv=2024-08-04&sig=5FUWINIWzfLKDYS99GgcMiysHP96TPIawJVW4HyUPe8%3D"
+        );
     }
 }

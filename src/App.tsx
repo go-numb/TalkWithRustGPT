@@ -15,8 +15,14 @@ type Fields = {
   msg?: string;
 };
 
+interface ResponseImage {
+  prompt: string;
+  url: string;
+}
+
 function App() {
   const [form] = Form.useForm();
+  const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isUpload, setIsUpload] = useState<boolean>(false);
@@ -129,6 +135,29 @@ function App() {
     }
   }, [transcript]);
 
+  const get_image_to_dell3 = (prompt: string) => {
+    invoke("chatgpt_request_to_dell3", { size: 1, msg: prompt })
+      .then((res) => {
+        let image = JSON.parse(res as string) as ResponseImage;
+        prompt = prompt + " to prompt, " + image.prompt;
+        console.debug(image);
+        setResult(`${prompt}`);
+        setResultImageUrl(image.url);
+      })
+      .catch((err) => {
+        console.error(`chatgpt_request_to_dell3 > ${err}`);
+
+        setStatus(`error: ${err}`);
+      })
+      .finally(() => {
+        reset_all_vers();
+        setQuery(`<h2 class="line_wrap">${prompt}</h2>\n`);
+        if (!listening) {
+          setStatus(StatusNone);
+        }
+      });
+  }
+
   const get_all_messages = () => {
     invoke("all_messages")
       .then((res) => {
@@ -167,6 +196,11 @@ function App() {
     // コマンドの処理
     if (_msg === "/all") {
       get_all_messages();
+      return;
+    } else if (_msg.includes("/image")) {
+      // remove /dell3
+      const prompt = _msg.replace("/image", "");
+      get_image_to_dell3(prompt);
       return;
     }
 
@@ -350,6 +384,8 @@ function App() {
         <div className="line_wrap" dangerouslySetInnerHTML={{ __html: query }} />
 
         <div className="code-container" dangerouslySetInnerHTML={{ __html: result }} />
+
+        <ImageComponent images={resultImageUrl ? [resultImageUrl] : []} size={1024} />
       </Flex>
 
       <Form

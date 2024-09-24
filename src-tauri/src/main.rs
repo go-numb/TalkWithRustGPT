@@ -21,9 +21,11 @@ const MODEL_CLAUDE_LOW: &str = "claude-3-opus-20240229";
 
 const MODEL_CHATGPT_HIGH: &str = "gpt-4o";
 const MODEL_CHATGPT_LOW: &str = "gpt-4o-mini";
+// const MODEL_CHATGPT_HIGH: &str = "o1-preview";
+// const MODEL_CHATGPT_LOW: &str = "o1-mini";
 
-const MODEL_GEMINI_HIGH: &str = "gemini-1.5-pro-exp-0827";
-const MODEL_GEMINI_LOW: &str = "gemini-1.5-flash-exp-0827";
+const MODEL_GEMINI_HIGH: &str = "gemini-1.5-pro-002";
+const MODEL_GEMINI_LOW: &str = "gemini-1.5-flash-002";
 
 #[tauri::command]
 async fn claude_request(
@@ -240,6 +242,28 @@ async fn chatgpt_request(
 }
 
 #[tauri::command]
+async fn chatgpt_request_to_dell3(size: u8, msg: &str) -> Result<String, String> {
+    // request
+    let res = match manage::chatgpt::request_to_dell3(size, msg).await {
+        Ok(res) => res,
+        Err(e) => return Err(format!("Request error: {}", e)),
+    };
+
+    // get response message
+    let (prompt, url) = match manage::utils::get_content_for_chatgpt_dell3(&res) {
+        Ok(text) => text,
+        Err(e) => return Err(format!("Error: {}", e).to_string()),
+    };
+
+    let text = json!({
+        "prompt": prompt,
+        "url": url,
+    });
+
+    Ok(text.to_string())
+}
+
+#[tauri::command]
 async fn gemini_request(
     b: u8,
     msg: &str,
@@ -373,6 +397,7 @@ fn main() {
             request_system,
             claude_request,
             chatgpt_request,
+            chatgpt_request_to_dell3,
             gemini_request,
             memo,
             all_messages
