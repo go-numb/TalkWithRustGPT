@@ -39,6 +39,13 @@ set env GOOGLE_GEMINI_API_KEY
 // If you specify the voice_id of the 棒読みちゃん, she will speak.  
 set env VOICEID
 
+// Options :: use model each ai
+set env CHATGPT_MODELS gpt-4o.gpt-4o-mini
+set env CLAUDE_MODELS claude-3-5-sonnet-20240620.claude-3-opus-20240229
+set env GEMINI_MODELS gemini-1.5-pro-002.gemini-1.5-flash-002
+
+
+
 ## Usage
 ```rust
 $ cargo tauri dev

@@ -1,9 +1,25 @@
-use crate::manage::message::Message;
+use crate::manage::{message::Message, utils};
 
 use super::utils::get_env;
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::result::Result;
+
+pub fn model() -> (String, String) {
+    let (mut high_model, mut low_model) = utils::model_high_and_low("CHATGPT_MODELS");
+    high_model = if high_model.is_empty() {
+        String::from("gpt-4o")
+    } else {
+        high_model
+    };
+    low_model = if low_model.is_empty() {
+        String::from("gpt-4o-mini")
+    } else {
+        low_model
+    };
+
+    (high_model, low_model)
+}
 
 pub fn to_content(message: Message) -> Value {
     if message.src.is_none() {

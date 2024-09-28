@@ -1,7 +1,3 @@
-use std::{error::Error, path::Prefix};
-
-use tauri::command;
-
 // prefix for command
 const PREFIX: &str = "/";
 

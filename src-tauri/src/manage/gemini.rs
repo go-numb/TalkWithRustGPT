@@ -1,9 +1,25 @@
-use crate::manage::message::Message;
+use crate::manage::{message::Message, utils};
 
-use super::utils::{get_env, get_file_type_by_extension};
+use super::utils::get_env;
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::result::Result;
+
+pub fn model() -> (String, String) {
+    let (mut high_model, mut low_model) = utils::model_high_and_low("GEMINI_MODELS");
+    high_model = if high_model.is_empty() {
+        String::from("gemini-1.5-pro-002")
+    } else {
+        high_model
+    };
+    low_model = if low_model.is_empty() {
+        String::from("gemini-1.5-flash-002")
+    } else {
+        low_model
+    };
+
+    (high_model, low_model)
+}
 
 pub fn to_content(message: Message) -> Value {
     if message.src.is_none() {
@@ -77,7 +93,8 @@ mod tests {
 
         let filepath = Path::new(r"D:\Download\evangelion_tv4_title.png");
         let data_type =
-            get_file_type_by_extension(filepath.file_name().unwrap().to_str().unwrap()).unwrap();
+            utils::get_file_type_by_extension(filepath.file_name().unwrap().to_str().unwrap())
+                .unwrap();
         let file_data = match std::fs::read(filepath) {
             Ok(data) => data,
             Err(e) => panic!("Failed to read file: {}", e),

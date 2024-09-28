@@ -15,18 +15,6 @@ use parking_lot::Mutex as Mut;
 use std::env;
 use std::sync::Arc;
 
-// const APPNAME: &str = "Talk with RustGPT";
-const MODEL_CLAUDE_HIGH: &str = "claude-3-5-sonnet-20240620";
-const MODEL_CLAUDE_LOW: &str = "claude-3-opus-20240229";
-
-const MODEL_CHATGPT_HIGH: &str = "gpt-4o";
-const MODEL_CHATGPT_LOW: &str = "gpt-4o-mini";
-// const MODEL_CHATGPT_HIGH: &str = "o1-preview";
-// const MODEL_CHATGPT_LOW: &str = "o1-mini";
-
-const MODEL_GEMINI_HIGH: &str = "gemini-1.5-pro-002";
-const MODEL_GEMINI_LOW: &str = "gemini-1.5-flash-002";
-
 #[tauri::command]
 async fn claude_request(
     b: u8,
@@ -36,11 +24,8 @@ async fn claude_request(
 ) -> Result<String, String> {
     let start_time = chrono::Local::now();
 
-    let (set_model, max_tokens) = if b == 1 {
-        (MODEL_CLAUDE_HIGH, 8192)
-    } else {
-        (MODEL_CLAUDE_LOW, 4096)
-    };
+    let (high, low) = manage::claude::model();
+    let (set_model, max_tokens) = if b == 1 { (high, 8192) } else { (low, 4096) };
 
     // add new request message, and get message history
     let messages = {
@@ -137,7 +122,7 @@ async fn claude_request(
     // トークン数・実行時間を算出し、整形する
     Ok(manage::utils::create_response(
         markdown_content.as_str(),
-        set_model,
+        set_model.as_str(),
         all_messages_string.as_str(),
         src,
         start_time,
@@ -153,11 +138,8 @@ async fn chatgpt_request(
 ) -> Result<String, String> {
     let start_time = chrono::Local::now();
 
-    let (set_model, max_tokens) = if b == 1 {
-        (MODEL_CHATGPT_HIGH, 4096)
-    } else {
-        (MODEL_CHATGPT_LOW, 16384)
-    };
+    let (high, low) = manage::chatgpt::model();
+    let (set_model, max_tokens) = if b == 1 { (high, 4096) } else { (low, 16384) };
 
     // add new request message, and get message history
     let mut messages = {
@@ -234,7 +216,7 @@ async fn chatgpt_request(
     // トークン数・実行時間を算出し、整形する
     Ok(manage::utils::create_response(
         markdown_content.as_str(),
-        set_model,
+        set_model.as_str(),
         all_messages_string.as_str(),
         src,
         start_time,
@@ -272,10 +254,11 @@ async fn gemini_request(
 ) -> Result<String, String> {
     let start_time = chrono::Local::now();
 
+    let (high, low) = manage::gemini::model();
     let (set_model, _max_tokens) = if b == 1 {
-        (MODEL_GEMINI_HIGH, 8192)
+        (high.as_str(), 8192)
     } else {
-        (MODEL_GEMINI_LOW, 8192)
+        (low.as_str(), 8192)
     };
 
     // add new request message, and get message history
