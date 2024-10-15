@@ -30,7 +30,7 @@ API: Google Gemini with image
 - [x] input voice, output voice
 - [x] voice commands ["教えて", "送信", "エンター"]
 - [x] get command for all messages
-- [x] command matome & save
+- [x] command matome & save(use filename from first #tag)
 
 ## Required
 set env CHATGPTTOKEN  

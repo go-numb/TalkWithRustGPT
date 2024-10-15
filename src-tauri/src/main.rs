@@ -6,7 +6,6 @@
 mod manage;
 mod sub;
 use dotenv::dotenv;
-use markdown::message;
 use serde_json::json;
 use tauri::State;
 // Logger

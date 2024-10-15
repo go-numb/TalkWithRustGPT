@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import "./App.css";
-import { Flex, Space, Row, Col, Button, Image, Form, Input, message, } from "antd";
+import { Flex, Space, Row, Col, Button, Select, Image, Form, Input } from "antd";
 const { TextArea } = Input;
 
-import { prompts } from "./components/prompts";
+import { prompts_list } from "./components/prompts";
 
 // Voice API
 import "regenerator-runtime/runtime";
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+
+import hljs from 'highlight.js';
+import 'highlight.js/styles/default.css';
+
+// import katex from 'katex';
+// import 'katex/dist/katex.min.css';
+
+
 
 type Fields = {
   b?: number;
@@ -29,6 +37,7 @@ function App() {
 
   const MAX_WIDTH = 512; // 例として512pxに設定
   const MAX_HEIGHT = 512; // 例として512pxに設定
+
 
   const StatusNotSupport = "❌ Browser doesn't support speech recognition."
   const StatusAvailable = "❌ Microphone function is off, access to microphone is required."
@@ -86,6 +95,14 @@ function App() {
     // textField?.focus();
     window.scrollTo(0, 0);
   }, [query]);
+
+  // resultの内容をhighlight.jsでハイライトする
+  useEffect(() => {
+    const code = document.querySelectorAll("pre code");
+    code.forEach((block) => {
+      hljs.highlightBlock(block as HTMLElement);
+    });
+  }, [result]);
 
   if (!browserSupportsSpeechRecognition) {
     setStatus(StatusNotSupport);
@@ -333,21 +350,6 @@ function App() {
     }
   }
 
-  const set_prompt = (num: number) => {
-    return () => {
-      switch (num) {
-        case 1:
-          to_request(prompts.matome);
-          break;
-        case 2:
-          to_request(prompts.save);
-          break;
-        default:
-          message.error("error: undefined prompt");
-      }
-    }
-  }
-
   const change_icon = (): string => {
     switch (AI) {
       case 0:
@@ -361,16 +363,10 @@ function App() {
 
   return (
     <Flex gap="large" vertical>
-      {/* 各ButtonとButtonの間隔を等間隔にし、かつ、最大幅で設置する */}
-      <Flex gap={'large'} justify="space-between">
-        <Button size="small" onClick={request_system(1)} title="厳格で正確な">&#x1f9d0;</Button>
-        <Button size="small" onClick={request_system(2)} title="フレンドリーな">&#x1fae0;</Button>
-        <Button size="small" onClick={request_system(3)} title="肯定的な">&#x1f973;</Button>
-        <Button size="small" onClick={request_system(4)} title="批判的な">&#x1f608;</Button>
-        <Button size="small" onClick={request_system(0)} title="無指示">&#x1fae5;</Button>
-        <Button size="small" onClick={set_prompt(1)} title="まとめ">&#x1f9d0;</Button>
-        <Button size="small" onClick={set_prompt(2)} title="保存">&#x1f910;</Button>
-      </Flex>
+
+
+
+
 
 
       <Flex gap={'large'} justify="space-between" vertical={false}>
@@ -383,9 +379,33 @@ function App() {
       <Flex wrap vertical={false} gap={'large'} justify="center">
         <div className="line_wrap" dangerouslySetInnerHTML={{ __html: query }} />
 
-        <div className="code-container" dangerouslySetInnerHTML={{ __html: result }} />
+        <div className="code-container markdown-body" dangerouslySetInnerHTML={{ __html: result }} />
+
 
         <ImageComponent images={resultImageUrl ? [resultImageUrl] : []} size={1024} />
+      </Flex>
+
+      <Flex gap={'large'} justify="space-between">
+        <Select
+          defaultValue={prompts_list[0].label}
+          style={{ width: '100%' }}
+          options={prompts_list}
+          onChange={(value) => {
+            // request 
+            console.log(value);
+            if (value === "None" || value === "") {
+              return;
+            }
+
+            // if value is number
+            if (!isNaN(Number(value))) {
+              request_system(Number(value))();
+              return;
+            }
+
+            to_request(value);
+          }}
+        />
       </Flex>
 
       <Form

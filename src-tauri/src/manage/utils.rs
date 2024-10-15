@@ -149,8 +149,23 @@ pub fn get_content_for_gemini(v: &Value) -> Result<String, String> {
 
 /// AIが出力したマークダウン用テキストをHTML出力する
 pub fn convert_markdown_to_html(text: &str) -> Result<String, String> {
-    markdown::to_html_with_options(text, &markdown::Options::gfm())
-        .map_err(|e| format!("markdown::to_html_with_options error: {}", e))
+    // KaTeXの数式をレンダリングする
+    // TODO
+
+    let mut mathed_op = markdown::ParseOptions::gfm();
+    mathed_op.constructs.math_flow = true;
+    mathed_op.constructs.math_text = true;
+    mathed_op.constructs.gfm_task_list_item = true;
+    mathed_op.constructs.gfm_table = true;
+
+    markdown::to_html_with_options(
+        text,
+        &markdown::Options {
+            compile: markdown::CompileOptions::default(),
+            parse: mathed_op,
+        },
+    )
+    .map_err(|e| format!("markdown::to_html_with_options error: {}", e))
 }
 
 /// invokeへの返り値を作成する

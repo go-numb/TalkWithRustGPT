@@ -1,7 +1,8 @@
 // 定数を設定し、公開する
 export const prompts = {
-    matome: '会話履歴を復習・知識定着のためにまとめて出力し、事後検索のための#キーワードでタグを付与してください。',
-    save: `会話履歴の要約と引き継ぎプロンプト作成指示：
+   self_analysis: "From all of our interactions what is one thing that you can tell me about myself that I may not know about myself. 日本語で出力してください。",
+   matome: '会話履歴を復習・知識定着のためにまとめて出力し、事後検索のための#キーワードでタグを付与してください。',
+   save: `会話履歴の要約と引き継ぎプロンプト作成指示：
 
 1. 目的：
    - 現在のユーザーの状況と学習進捗を正確に把握し、後任者が効率的に継続サポートできるようにする
@@ -32,3 +33,18 @@ export const prompts = {
 
 この形式に沿って、現在の会話履歴を分析し、効果的な引き継ぎプロンプトを作成してください。`,
 }
+
+interface Value {
+   label: string;
+   value: string;
+};
+
+export const prompts_list: Value[] = [
+   { label: "None", value: "0" },
+   { label: "[system] 厳格で正確な", value: "1" },
+   { label: "[system] 肯定的な", value: "3" },
+   { label: "[system] 批判的な", value: "4" },
+   { label: "[user] 自己分析", value: prompts.self_analysis },
+   { label: "[user] まとめ", value: prompts.matome },
+   { label: "[user] 引き継ぎ", value: prompts.save },
+];
