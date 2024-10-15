@@ -11,6 +11,8 @@ use log::info;
 
 use std::fs::create_dir_all;
 
+use crate::manage::filetitle;
+
 const APPNAME: &str = "Talk with RustGPT";
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -68,13 +70,6 @@ impl Shelf {
         let document_dir = user_dir.document_dir().unwrap();
         let save_dir = document_dir.join(".appdata").join(APPNAME);
 
-        create_dir_all(save_dir.as_path()).unwrap();
-        let date = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
-        let filename = format!("memo-{}.txt", date);
-
-        let full_path = save_dir.join(filename.as_str());
-        info!("save memo to {:?}", full_path);
-
         // without system messages
         let copy_shelf = self.clone();
         let messages = copy_shelf.messages.get();
@@ -90,6 +85,14 @@ impl Shelf {
             })
             .collect::<Vec<String>>()
             .join("\n\n");
+
+        // create filename & save path
+        create_dir_all(save_dir.as_path()).unwrap();
+        // #tag based filename or default filename
+        let filename = filetitle::to_title(data.as_str());
+
+        let full_path = save_dir.join(filename.as_str());
+        info!("save memo to {:?}", full_path);
 
         let mut file = match File::create(full_path) {
             Ok(file) => file,
