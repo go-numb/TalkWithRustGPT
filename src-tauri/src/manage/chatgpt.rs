@@ -8,7 +8,7 @@ use std::result::Result;
 pub fn model() -> (String, String) {
     let (mut high_model, mut low_model) = utils::model_high_and_low("CHATGPT_MODELS");
     high_model = if high_model.is_empty() {
-        String::from("gpt-4o")
+        String::from("chatgpt-4o")
     } else {
         high_model
     };

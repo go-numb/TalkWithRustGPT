@@ -8,12 +8,12 @@ use std::result::Result;
 pub fn model() -> (String, String) {
     let (mut high_model, mut low_model) = utils::model_high_and_low("GEMINI_MODELS");
     high_model = if high_model.is_empty() {
-        String::from("gemini-1.5-pro-002")
+        String::from("gemini-2.0-flash")
     } else {
         high_model
     };
     low_model = if low_model.is_empty() {
-        String::from("gemini-1.5-flash-002")
+        String::from("gemini-2.0-flash")
     } else {
         low_model
     };

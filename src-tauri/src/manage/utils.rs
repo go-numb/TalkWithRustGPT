@@ -14,7 +14,7 @@ use crate::sub;
 pub fn model_high_and_low(key: &str) -> (String, String) {
     match std::env::var(key) {
         Ok(val) => {
-            let models: Vec<&str> = val.split('.').collect();
+            let models: Vec<&str> = val.split(',').collect();
             if models.len() == 2 {
                 (models[0].to_string(), models[1].to_string())
             } else {

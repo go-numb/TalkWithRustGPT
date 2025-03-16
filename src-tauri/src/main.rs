@@ -27,7 +27,7 @@ async fn claude_request(
     let (set_model, max_tokens) = if b == 1 { (high, 8192) } else { (low, 4096) };
 
     // add new request message, and get message history
-    let messages = {
+    let (messages, system_prompt) = {
         let set_src = if src.is_empty() {
             None
         } else {
@@ -37,21 +37,17 @@ async fn claude_request(
         mut_shelf.add_to_messages("user".to_string(), msg.to_string(), set_src);
 
         let guard_shelf = mut_shelf.clone();
-        guard_shelf.get_messages()
-    };
 
-    // get system prompt
-    // meke simple string for claude
-    let system_prompt = {
-        let mut_shelf = state.lock();
-        let system_prompt = mut_shelf.system_messages.get();
-        if !system_prompt.is_empty() {
+        let system_prompts = mut_shelf.system_messages.get();
+        let system_prompt = if !system_prompts.is_empty() {
             // 最期の配列をStringで出力
-            let prompt = system_prompt.last().unwrap();
+            let prompt = system_prompts.last().unwrap();
             prompt.content.to_string()
         } else {
             "".to_string()
-        }
+        };
+
+        (guard_shelf.get_messages(), system_prompt)
     };
 
     // request
@@ -107,8 +103,10 @@ async fn claude_request(
     //     );
     // }
 
+    // Token数を算出するため
+    // 履歴は消費する
     let all_messages_string = history_messages
-        .iter()
+        .into_iter()
         .map(|message| message.content.to_string())
         .collect::<String>();
 
@@ -138,10 +136,10 @@ async fn chatgpt_request(
     let start_time = chrono::Local::now();
 
     let (high, low) = manage::chatgpt::model();
-    let (set_model, max_tokens) = if b == 1 { (high, 4096) } else { (low, 16384) };
+    let (set_model, _max_tokens) = if b == 1 { (high, 4096) } else { (low, 16384) };
 
     // add new request message, and get message history
-    let mut messages = {
+    let messages = {
         let set_src = if src.is_empty() {
             None
         } else {
@@ -151,23 +149,20 @@ async fn chatgpt_request(
         mut_shelf.add_to_messages("user".to_string(), msg.to_string(), set_src);
 
         let guard_shelf = mut_shelf.clone();
-        guard_shelf.get_messages()
-    };
+        let mut messages = guard_shelf.get_messages();
 
-    // system prompt append messages
-    let messages = {
-        let mut_shelf = state.lock();
         let system_prompt = mut_shelf.system_messages.get();
         if let Some(prompt) = system_prompt.last() {
             messages.push(prompt.clone());
         }
+
         messages
     };
 
     // request
     let body = json!({
         "model": set_model,
-        "max_tokens": max_tokens,
+        // "max_tokens": max_tokens, 4o-previewではサポートされていない
         "messages": messages.iter().map(|m| {
             json!({
                 "role": m.role,
@@ -201,8 +196,10 @@ async fn chatgpt_request(
     //     );
     // }
 
+    // Token数を算出するため
+    // 履歴は消費する
     let all_messages_string = history_messages
-        .iter()
+        .into_iter()
         .map(|message| message.content.to_string())
         .collect::<String>();
 
@@ -261,7 +258,7 @@ async fn gemini_request(
     };
 
     // add new request message, and get message history
-    let messages = {
+    let (messages, system_prompt) = {
         let set_src = if src.is_empty() {
             None
         } else {
@@ -271,21 +268,17 @@ async fn gemini_request(
         mut_shelf.add_to_messages("user".to_string(), msg.to_string(), set_src);
 
         let guard_shelf = mut_shelf.clone();
-        guard_shelf.get_messages()
-    };
 
-    // get system prompt
-    // meke simple string for claude
-    let system_prompt = {
-        let mut_shelf = state.lock();
-        let system_prompt = mut_shelf.system_messages.get();
-        if !system_prompt.is_empty() {
+        let system_prompts = mut_shelf.system_messages.get();
+        let system_prompt = if !system_prompts.is_empty() {
             // 最期の配列をStringで出力
-            let prompt = system_prompt.last().unwrap();
+            let prompt = system_prompts.last().unwrap();
             prompt.content.to_string()
         } else {
             "".to_string()
-        }
+        };
+
+        (guard_shelf.get_messages(), system_prompt)
     };
 
     // request
@@ -343,8 +336,10 @@ async fn gemini_request(
     //     );
     // }
 
+    // Token数を算出するため
+    // 履歴は消費する
     let all_messages_string = history_messages
-        .iter()
+        .into_iter()
         .map(|message| message.content.to_string())
         .collect::<String>();
 

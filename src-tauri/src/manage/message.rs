@@ -1,6 +1,5 @@
 use directories::UserDirs;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::io::Write;
 
 use std::fs::File;

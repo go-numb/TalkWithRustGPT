@@ -8,12 +8,12 @@ use std::result::Result;
 pub fn model() -> (String, String) {
     let (mut high_model, mut low_model) = utils::model_high_and_low("CLAUDE_MODELS");
     high_model = if high_model.is_empty() {
-        String::from("claude-3-5-sonnet-20240620")
+        String::from("claude-3-7-sonnet,")
     } else {
         high_model
     };
     low_model = if low_model.is_empty() {
-        String::from("claude-3-opus-20240229")
+        String::from("claude-3-5-haiku")
     } else {
         low_model
     };
