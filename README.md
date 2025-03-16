@@ -12,12 +12,14 @@ API: OpenAI ChatGPT with image
 - low: 4o-mini  
 
 API: Anthropic Claude with image
-- hight: 3.5 sonnet
-- low: 3 opus
+- hight: 3.7 sonnet
+- low: 3.5 haiku
 
 API: Google Gemini with image
-- hight: 1.5 pro
-- low: 1.5 flex
+- hight: 2.0 flex
+- low: 2.0 flex
+
+※ you can use/change models by enviroment vars.
 
 [Release](https://github.com/go-numb/TalkWithRustGPT/releases)  
 
