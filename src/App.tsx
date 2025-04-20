@@ -1,3 +1,31 @@
+/**
+ * メインアプリケーションコンポーネント。
+ * 
+ * - 音声認識、画像アップロード、AIモデル切り替え、プロンプト選択などの機能を提供します。
+ * - Tauriバックエンドとの通信を行い、AIサービス（Claude, ChatGPT, Gemini）へのリクエストを管理します。
+ * - 入力フォーム、音声認識、画像リサイズ・表示、メッセージ履歴管理などのUIを含みます。
+ * 
+ * @component
+ * @returns {JSX.Element} アプリケーションのルート要素
+ */
+
+/**
+ * 画像を表示するコンポーネント。
+ * 
+ * @param {Object} props
+ * @param {string[]} props.images - 表示する画像のBase64またはURL配列
+ * @param {number} props.size - 画像の表示サイズ（px）
+ * @returns {JSX.Element[]} 画像要素の配列
+ */
+
+/**
+ * 画像ファイルをリサイズし、Base64データURLに変換する関数。
+ * 
+ * @param {File} file - 入力画像ファイル
+ * @param {number} maxWidth - 最大幅（px）
+ * @param {number} maxHeight - 最大高さ（px）
+ * @returns {Promise<string>} リサイズ後のBase64データURL
+ */
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
@@ -13,6 +41,7 @@ import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognitio
 import hljs from 'highlight.js';
 import 'highlight.js/styles/default.css';
 import { DrugComponent } from "./components/drug";
+import { ImageComponent, resizeImageAndConvertToBase64 } from "./components/image";
 
 type Fields = {
   b?: number;
@@ -57,15 +86,12 @@ function App() {
     browserSupportsSpeechRecognition,
     isMicrophoneAvailable,
   } = useSpeechRecognition();
-  const [msg, setMsg] = useState("");
-
-  // // file upload
-  // const [fileList, setFileList] = useState<UploadFile<any>[]>([]);
 
   const [query, setQuery] = useState("");
   const [result, setResult] = useState("");
   const [model, setModel] = useState<number>(1);
-  const [AI, setAI] = useState<number>(0);
+  // set gemini
+  const [AI, setAI] = useState<number>(2);
   const [status, setStatus] = useState(StatusModelHigh);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -130,19 +156,18 @@ function App() {
 
   useEffect(() => { // 音声認識が開始されたら、入力フォームにフォーカス
     if (listening) {
-      setMsg(transcript);
       setStatus(StatusListen);
 
-      form.setFieldValue("msg", transcript);
+      let set_text = transcript;
+      form.setFieldValue("msg", set_text);
 
-      console.debug(`listening: ${listening}, ${transcript}, msg: ${msg}`);
-
-      let [is_there, command] = is_command_enter(transcript);
+      let [is_there, command] = is_command_enter(set_text);
       if (is_there) {
         console.debug("command enter");
         resetTranscript();
-        let reqest = msg.replace(command, "");
-        setMsg(reqest);
+
+
+        let reqest = set_text.replace(command, "");
         to_request(reqest);
       }
     }
@@ -171,10 +196,11 @@ function App() {
       });
   }
 
-  const get_all_messages = () => {
-    invoke("all_messages")
+  const get_all_messages = (isRow: boolean) => {
+    invoke("all_messages", { is_row: isRow })
       .then((res: any) => {
         console.debug(res);
+
         setResult(`${res}`);
       })
       .catch((err: any) => {
@@ -192,27 +218,29 @@ function App() {
   }
 
   const to_request = async (req: string) => {
-    let _msg = msg;
-    if (req != "") {
-      console.debug("req: ", req);
+    const request_message = req === "" ? form.getFieldValue("msg") : req;
 
-      _msg = req;
-    }
-    console.debug(_msg);
+    console.debug(request_message);
 
-    if (_msg === "") {
+    if (request_message === "") {
       setResult("Please enter a msg.");
       return;
     }
     setStatus(StatusThinking);
 
     // コマンドの処理
-    if (_msg === "/all") {
-      get_all_messages();
+    const command = request_message.trim();
+    if (command === "/row") {
+      // マークダウン整形せず出力
+      get_all_messages(true);
       return;
-    } else if (_msg.includes("/image")) {
+    } else if (command === "/all") {
+      // マークダウン整形して出力
+      get_all_messages(false);
+      return;
+    } else if (command.includes("/image")) {
       // remove /dell3
-      const prompt = _msg.replace("/image", "");
+      const prompt = command.replace("/image", "");
       get_image_to_dell3(prompt);
       return;
     }
@@ -230,7 +258,7 @@ function App() {
     console.log(`invoke: ${to_invoke}`);
 
 
-    invoke(to_invoke, { b: model, msg: _msg, src: src })
+    invoke(to_invoke, { b: model, msg: request_message, src: src })
       .then((res: any) => { // Add type annotation to 'res'
         console.debug(res);
 
@@ -243,7 +271,7 @@ function App() {
       })
       .finally(() => {
         reset_all_vers();
-        setQuery(`<h2 class="line_wrap">Q: ${_msg}</h2>\n`);
+        setQuery(`<h2 class="line_wrap">Q: ${request_message}</h2>\n`);
         if (!listening) {
           setStatus(StatusNone);
         }
@@ -306,7 +334,6 @@ function App() {
     console.debug("reset_all_vers");
 
     resetTranscript();
-    setMsg("");
     setImageUrl(null);
     form.setFieldValue("msg", "");
 
@@ -314,18 +341,15 @@ function App() {
     window.scrollTo(0, 0);
     // カーソルをtextareaに移動
     inputRef.current?.focus();
-
-    console.debug(msg);
-
   }
 
   const is_command_enter = (str: string): [Boolean, string] => {
-    let _msg = str;
-    if (_msg.endsWith("エンター。")) {
+    let command_str = str;
+    if (command_str.endsWith("エンター。")) {
       return [true, "エンター"];
-    } else if (_msg.endsWith("送信。")) {
+    } else if (command_str.endsWith("送信。")) {
       return [true, "送信"];
-    } else if (_msg.endsWith("教えて。")) {
+    } else if (command_str.endsWith("教えて。")) {
       return [true, ""];
     }
 
@@ -370,43 +394,95 @@ function App() {
   return (
     <Flex gap="large" vertical>
       <DrugComponent onFileDrop={onDrop} />
-      <Flex gap={'large'} justify="space-between" vertical={false}>
-        <Image preview={false} style={{ maxWidth: '128px' }} onClick={reset_messages} src="/delete.png" className="logo reset message" alt="reset message logo" title="reset messages & save to file" />
-        <Image preview={false} style={{ maxWidth: '128px' }} onClick={switch_model} src={model === 0 ? "/switch-model-high.png" : "/switch-model-low.png"} className="logo switch model" alt="switch model logo" title="switch set model" />
-        <Image preview={false} style={{ maxWidth: '128px' }} onClick={switch_ai} src={change_icon()} className="logo switch ai" alt="switch ai logo" title="switch set ai" />
-        <Image preview={false} style={{ maxWidth: '128px' }} onClick={speech} src="/vc.png" className="logo vc" alt="vc logo" title="start/end vc for message" />
+      {/* 上部固定 */}
+      <Flex className="fixed-top" gap="large" justify="end" align="center" vertical={false} >
+        <Image
+          height={40}
+          src="/delete.png"
+          onClick={reset_messages}
+          alt="reset message logo"
+          title="reset messages & save to file"
+          className="reset message"
+          preview={false}
+        />
+        <Image
+          height={40}
+          src={model === 0 ? "/switch-model-high.png" : "/switch-model-low.png"}
+          onClick={switch_model}
+          alt="switch model logo"
+          title="switch set model"
+          className="switch model"
+          preview={false}
+        />
+        <Image
+          height={40}
+          src={change_icon()}
+          onClick={switch_ai}
+          alt="switch ai logo"
+          title="switch set ai"
+          className="switch ai"
+          preview={false}
+        />
+        <Image
+          height={40}
+          src="/vc.png"
+          onClick={speech}
+          alt="vc logo"
+          title="start/end vc for message"
+          className="vc"
+          preview={false}
+        />
       </Flex>
 
-      <Flex wrap vertical={false} gap={'large'} justify="center">
-        <div className="line_wrap" dangerouslySetInnerHTML={{ __html: query }} />
+      <Flex wrap vertical={false} gap="large" justify="center">
+        {/* 質問内容の表示 */}
+        {query && (
+          <Row>
+            <Col span={24}>
+              <div
+                className="line_wrap"
+                dangerouslySetInnerHTML={{ __html: query }}
+              />
+            </Col>
+          </Row>
+        )}
 
-        <div className="code-container markdown-body" dangerouslySetInnerHTML={{ __html: result }} />
+        {/* 回答内容の表示 */}
+        {result && (
+          <Row>
+            <Col span={24}>
+              <div
+                className="code-container markdown-body"
+                dangerouslySetInnerHTML={{ __html: result }}
+              />
+            </Col>
+          </Row>
+        )}
 
-
-        <ImageComponent images={resultImageUrl ? [resultImageUrl] : []} size={1024} />
+        {/* 画像の表示 */}
+        {resultImageUrl && (
+          <ImageComponent images={[resultImageUrl]} size={1024} />
+        )}
       </Flex>
 
-      <Flex gap={'large'} justify="space-between">
+      <Flex gap="large" justify="space-between">
+        {/* 用途による文面を自動挿入 */}
         <Select
           defaultValue={prompts_list[0].label}
-          style={{ width: '100%' }}
+          style={{ width: "100%" }}
           options={prompts_list}
           onChange={(value) => {
-            // request 
-            console.log(value);
-            if (value === "None" || value === "") {
+            if (!value || value === "None") return;
+
+            // Rust側にリクエストを送信
+            // Rust処理（リクエスト・出力）と、GUI文字挿入がある。
+            const numValue = Number(value);
+            if (!isNaN(numValue)) {
+              request_system(numValue)();
               return;
             }
 
-            // if value is number
-            if (!isNaN(Number(value))) {
-              request_system(Number(value))();
-              return;
-            }
-
-            // set message
             form.setFieldValue("msg", value);
-            setMsg(value);
           }}
         />
       </Flex>
@@ -415,67 +491,37 @@ function App() {
         name="basic"
         form={form}
         wrapperCol={{ span: 24 }}
-        // style={{ maxWidth: 600 }}
         className="form"
-        onFinish={(_) => {
-          to_request("");
-        }}
+        onFinish={() => to_request("")}
       >
-        <Form.Item<Fields>
-          name="msg"
-          wrapperCol={{ span: 24 }}
-        >
+        <Form.Item<Fields> name="msg" wrapperCol={{ span: 24 }}>
           <TextArea
             ref={inputRef}
-            value={msg}
             rows={4}
-            // onPaste={(e) => {
-            //   // text only
-            //   // console.debug("onPaste" + msg);
-
-            //   // 通常通りのペーストを行う
-            //   setMsg((prev) => prev + e.clipboardData.getData("text"));
-            // }}
-            onPasteCapture={(e) => {
-              // image only
-              if (!e.clipboardData.files.length) {
-                return
-              }
+            placeholder="Enter a msg..."
+            onPasteCapture={async (e) => {
+              if (!e.clipboardData.files.length) return;
               e.preventDefault();
-              // upload file
-              const files = e.clipboardData.files;
-              // console.debug("files: ");
-              console.debug(files);
-
-              // get image file
-              const file = files[0];
+              const file = e.clipboardData.files[0];
               if (file) {
-                const base_image = resizeImageAndConvertToBase64(file, MAX_WIDTH, MAX_HEIGHT);
-                base_image.then((base64) => {
-                  setImageUrl(base64);
-                  setIsUpload(false);
-                });
+                const base64 = await resizeImageAndConvertToBase64(file, MAX_WIDTH, MAX_HEIGHT);
+                setImageUrl(base64);
+                setIsUpload(false);
               }
             }}
-            // onChange={(e) => {
-            //   setMsg(e.currentTarget.value)
-            // }}
-            placeholder="Enter a msg..."
           />
         </Form.Item>
 
-        <Flex gap={"large"}>
+        <Flex gap="large">
           <Row>
             <Col>
               <ImageComponent images={imageUrl ? [imageUrl] : []} size={200} />
-
               <Flex wrap>
-                <ImageComponent images={imageUrls ? imageUrls : []} size={58} />
+                <ImageComponent images={imageUrls ?? []} size={58} />
               </Flex>
             </Col>
           </Row>
         </Flex>
-
 
         <Form.Item wrapperCol={{ offset: 21, span: 3 }}>
           <Button type="primary" htmlType="submit">
@@ -491,70 +537,5 @@ function App() {
     </Flex>
   );
 }
-
-// imageがあれば、表示するコンポネント
-const ImageComponent = ({ images, size }: { images: string[], size: number }) => {
-  return (
-    images.map((image, index) => (
-      <Image
-        key={index}
-        width={size}
-        src={image}
-      />
-    ))
-  );
-}
-
-const resizeImageAndConvertToBase64 = (file: File, maxWidth: number, maxHeight: number): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img: HTMLImageElement = document.createElement("img");
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-
-        if (!ctx) {
-          reject(new Error('Failed to get canvas context'));
-          return;
-        }
-
-        // 元の画像サイズを取得
-        const originalWidth = img.width;
-        const originalHeight = img.height;
-
-        // リサイズするサイズを計算
-        let newWidth = originalWidth;
-        let newHeight = originalHeight;
-
-        if (originalWidth > maxWidth || originalHeight > maxHeight) {
-          const widthRatio = maxWidth / originalWidth;
-          const heightRatio = maxHeight / originalHeight;
-          const bestRatio = Math.min(widthRatio, heightRatio);
-
-          newWidth = originalWidth * bestRatio;
-          newHeight = originalHeight * bestRatio;
-        }
-
-        canvas.width = newWidth;
-        canvas.height = newHeight;
-        console.debug("newWidth: ", newWidth, "newHeight: ", newHeight);
-
-
-        ctx.drawImage(img, 0, 0, newWidth, newHeight);
-        const dataUrl = canvas.toDataURL('image/png');
-        // console.debug("dataUrl: ", dataUrl);
-
-        resolve(dataUrl);
-      };
-      img.src = event.target!.result as string;
-    };
-    reader.onerror = (error) => {
-      reject(new Error('Failed to read file: ' + error));
-    };
-
-    reader.readAsDataURL(file);
-  });
-};
 
 export default App;

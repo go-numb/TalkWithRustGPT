@@ -6,6 +6,8 @@ use std::{
 use log::info;
 use tauri::State;
 
+use crate::manage::utils::convert_markdown_to_html;
+
 mod manage;
 mod sub;
 
@@ -114,6 +116,7 @@ fn request_system(
 
 #[tauri::command]
 async fn all_messages(
+    is_row: bool,
     state: State<'_, Arc<Mutex<manage::message::Shelf>>>,
 ) -> Result<String, String> {
     let shelf = state.lock().unwrap();
@@ -136,7 +139,17 @@ async fn all_messages(
             }
         })
         .collect::<String>();
-    Ok(all_messages_string)
+
+    if is_row {
+        // 出力を整形せず出力する
+        // \n to <br> 変換
+        return Ok(all_messages_string.replace("\n", "<br>"));
+    }
+
+    match convert_markdown_to_html(&all_messages_string) {
+        Ok(html) => Ok(html),
+        Err(e) => Err(format!("Error converting to HTML: {}", e)),
+    }
 }
 
 #[tauri::command]

@@ -205,6 +205,7 @@ mod tests {
     use crate::manage::utils::get_content_for_gemini;
 
     use super::*;
+    use base64::Engine;
     use serde_json::json;
 
     #[tokio::test]
@@ -222,7 +223,7 @@ mod tests {
             Err(e) => panic!("Failed to read file: {}", e),
         };
 
-        let data = base64::encode(file_data);
+        let data = base64::engine::general_purpose::STANDARD.encode(file_data);
         // 最初の20文字だけ表示
         println!("data: {}, {:?}", data_type, &data[..20]);
 
