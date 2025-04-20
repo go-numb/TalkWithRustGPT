@@ -114,9 +114,9 @@ fn request_system(
     Ok("success".to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 async fn all_messages(
-    is_row: bool,
+    is_raw: bool,
     state: State<'_, Arc<Mutex<manage::message::Shelf>>>,
 ) -> Result<String, String> {
     let shelf = state.lock().unwrap();
@@ -140,7 +140,7 @@ async fn all_messages(
         })
         .collect::<String>();
 
-    if is_row {
+    if is_raw {
         // 出力を整形せず出力する
         // \n to <br> 変換
         return Ok(all_messages_string.replace("\n", "<br>"));

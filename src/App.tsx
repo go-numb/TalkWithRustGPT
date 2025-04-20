@@ -196,8 +196,8 @@ export const App = () => {
       });
   }
 
-  const get_all_messages = (isRow: boolean) => {
-    invoke("all_messages", { is_row: isRow })
+  const get_all_messages = (isRaw: boolean) => {
+    invoke("all_messages", { is_raw: isRaw })
       .then((res: any) => {
         console.debug(res);
 
@@ -210,7 +210,7 @@ export const App = () => {
       })
       .finally(() => {
         reset_all_vers();
-        setQuery(`<h2 class="line_wrap">historical messages: </h2>\n`);
+        setQuery(`<h2 class="line_wrap">historical messages RAW: ${isRaw}</h2>\n`);
         if (!listening) {
           setStatus(StatusNone);
         }
@@ -230,7 +230,7 @@ export const App = () => {
 
     // コマンドの処理
     const command = request_message.trim();
-    if (command === "/row") {
+    if (command === "/raw") {
       // マークダウン整形せず出力
       get_all_messages(true);
       return;
