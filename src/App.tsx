@@ -29,7 +29,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
-import { Flex, Space, Row, Col, Button, Select, Image, Form, Input } from "antd";
+import { Flex, Space, Row, Col, Button, Select, Image, Form, Input, Typography } from "antd";
 const { TextArea } = Input;
 
 import { prompts_list } from "./components/prompts";
@@ -53,7 +53,7 @@ interface ResponseImage {
   url: string;
 }
 
-function App() {
+export const App = () => {
   const [form] = Form.useForm();
   const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -395,7 +395,7 @@ function App() {
     <Flex gap="large" vertical>
       <DrugComponent onFileDrop={onDrop} />
       {/* 上部固定 */}
-      <Flex className="fixed-top" gap="large" justify="end" align="center" vertical={false} >
+      <Flex className="fixed-left-bottom" gap="large" justify="end" align="center" vertical={false} >
         <Image
           height={40}
           src="/delete.png"
@@ -434,36 +434,38 @@ function App() {
         />
       </Flex>
 
-      <Flex wrap vertical={false} gap="large" justify="center">
-        {/* 質問内容の表示 */}
-        {query && (
-          <Row>
-            <Col span={24}>
-              <div
-                className="line_wrap"
-                dangerouslySetInnerHTML={{ __html: query }}
-              />
-            </Col>
-          </Row>
-        )}
+      <Typography style={{ lineHeight: "1.75" }}>
+        <Flex wrap vertical={false} gap="large" justify="center">
+          {/* 質問内容の表示 */}
+          {query && (
+            <Row>
+              <Col span={24}>
+                <div
+                  className="line_wrap"
+                  dangerouslySetInnerHTML={{ __html: query }}
+                />
+              </Col>
+            </Row>
+          )}
 
-        {/* 回答内容の表示 */}
-        {result && (
-          <Row>
-            <Col span={24}>
-              <div
-                className="code-container markdown-body"
-                dangerouslySetInnerHTML={{ __html: result }}
-              />
-            </Col>
-          </Row>
-        )}
+          {/* 回答内容の表示 */}
+          {result && (
+            <Row>
+              <Col span={24}>
+                <div
+                  className="code-container markdown-body"
+                  dangerouslySetInnerHTML={{ __html: result }}
+                />
+              </Col>
+            </Row>
+          )}
 
-        {/* 画像の表示 */}
-        {resultImageUrl && (
-          <ImageComponent images={[resultImageUrl]} size={1024} />
-        )}
-      </Flex>
+          {/* 画像の表示 */}
+          {resultImageUrl && (
+            <ImageComponent images={[resultImageUrl]} size={1024} />
+          )}
+        </Flex>
+      </Typography>
 
       <Flex gap="large" justify="space-between">
         {/* 用途による文面を自動挿入 */}
@@ -536,6 +538,4 @@ function App() {
 
     </Flex>
   );
-}
-
-export default App;
+};
