@@ -29,7 +29,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
-import { Flex, Space, Row, Col, Button, Select, Image, Form, Input, Typography } from "antd";
+import { Flex, Space, Row, Col, Button, Select, Image, Form, Input, Typography, message } from "antd";
 const { TextArea } = Input;
 
 import { prompts_list } from "./components/prompts";
@@ -42,6 +42,7 @@ import hljs from 'highlight.js';
 import 'highlight.js/styles/default.css';
 import { DrugComponent } from "./components/drug";
 import { ImageComponent, resizeImageAndConvertToBase64 } from "./components/image";
+import { sliceText } from "./common/string";
 
 type Fields = {
   b?: number;
@@ -54,6 +55,7 @@ interface ResponseImage {
 }
 
 export const App = () => {
+  const [messageApi, contextHolder] = message.useMessage();
   const [form] = Form.useForm();
   const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -271,7 +273,7 @@ export const App = () => {
       })
       .finally(() => {
         reset_all_vers();
-        setQuery(`<h2 class="line_wrap">Q: ${request_message}</h2>\n`);
+        setQuery(`Q: ${request_message}`);
         if (!listening) {
           setStatus(StatusNone);
         }
@@ -283,6 +285,7 @@ export const App = () => {
   const reset_messages = () => {
     memo();
     invoke("reset");
+    setQuery("");
     setImageUrls([]);
     setStatus(StatusResetMessages);
   };
@@ -393,6 +396,7 @@ export const App = () => {
 
   return (
     <Flex gap="large" vertical>
+      {contextHolder}
       <DrugComponent onFileDrop={onDrop} />
       {/* 上部固定 */}
       <Flex className="fixed-left-bottom" gap="large" justify="end" align="center" vertical={false} >
@@ -436,30 +440,34 @@ export const App = () => {
 
       <Typography style={{ lineHeight: "1.75" }}>
         <Flex wrap vertical={false} gap="large" justify="center">
-          {/* 質問内容の表示 */}
-          {query && (
-            <Row>
+          <Row>
+            {/* 質問内容の表示 */}
+            {query && (
+
               <Col span={24}>
                 <div
                   className="line_wrap"
-                  dangerouslySetInnerHTML={{ __html: query }}
+                  title={query}
+                  dangerouslySetInnerHTML={{ __html: `<h3 class="line_wrap">${sliceText(query, 25)}<h3>` }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(query);
+                    messageApi.success("Copied to clipboard!");
+                  }}
                 />
               </Col>
-            </Row>
-          )}
+            )}
 
-          {/* 回答内容の表示 */}
-          {result && (
-            <Row>
+            {/* 回答内容の表示 */}
+            {result && (
               <Col span={24}>
                 <div
                   className="code-container markdown-body"
                   dangerouslySetInnerHTML={{ __html: result }}
                 />
               </Col>
-            </Row>
-          )}
 
+            )}
+          </Row>
           {/* 画像の表示 */}
           {resultImageUrl && (
             <ImageComponent images={[resultImageUrl]} size={1024} />
