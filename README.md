@@ -66,6 +66,23 @@ $ npm tauri dev
 $ npm tauri build
 ```
 
+## Build Windows .exe from WSL (Docker)
+WSL 側の環境を汚さずに、Docker コンテナ内で Windows 向け `.exe`（GNU ターゲット）を生成します。
+
+### Required
+- WSL から `docker` コマンドが使えること（Docker Desktop + WSL integration 等）
+
+### Run
+```bash
+chmod +x scripts/build-win-exe.sh
+./scripts/build-win-exe.sh
+```
+
+### Output
+- `artifacts/windows/*.exe`
+
+※ MSI/NSIS などの Windows インストーラ生成は、基本的に Windows 環境での `cargo tauri build` が必要です。
+
 
 
 ## via golang client

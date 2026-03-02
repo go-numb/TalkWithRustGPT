@@ -91,7 +91,7 @@ export const App = () => {
 
   const [query, setQuery] = useState("");
   const [result, setResult] = useState("");
-  const [model, setModel] = useState<number>(1);
+  const [model, setModel] = useState<number>(0);
   // set gemini
   const [AI, setAI] = useState<number>(2);
   const [status, setStatus] = useState(StatusModelHigh);

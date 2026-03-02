@@ -1,0 +1,14 @@
+.git
+node_modules
+dist
+target
+artifacts
+
+**/node_modules
+**/dist
+**/target
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode
