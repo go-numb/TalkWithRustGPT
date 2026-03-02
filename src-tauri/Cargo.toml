@@ -27,9 +27,9 @@ log = "0.4.27"
 dotenv = "0.15.0"
 reqwest = { version = "0.12.15", features = ["blocking", "json"] }
 directories = "6.0.0"
-tiktoken-rs = "0.6.0"
 markdown = "1.0.0-alpha.21"
 bouyomi4rs = "0.2.1"
 chrono = "0.4.40"
 tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread", "time"] }
 base64 = "0.22.1"
+ammonia = "4.0.0"

@@ -83,46 +83,26 @@ pub async fn gemini_request(
         Err(e) => return Err(format!("Request error: {}", e)),
     };
 
-    // get response message
-    let text = match manage::utils::get_content_for_gemini(&res) {
-        Ok(text) => text,
-        Err(e) => format!("Error: {}", e),
+    // get response message and token count
+    let (text, token_count) = match manage::utils::get_content_for_gemini(&res) {
+        Ok(v) => v,
+        Err(e) => (format!("Error: {}", e), 0),
     };
 
     // メッセージを履歴に追加
-    let history_messages = {
+    {
         let mut mut_shelf = state.lock().unwrap();
         mut_shelf.add_to_messages("assistant".to_string(), text.clone(), None);
-        let guard_shelf = mut_shelf.clone();
-        guard_shelf.get_messages()
-    };
+    }
 
-    // for (index, message) in history_messages.iter().enumerate() {
-    //     println!(
-    //         "{} - role: {}, content: {}",
-    //         index, message.role, message.content
-    //     );
-    // }
-
-    // Token数を算出するため
-    // 履歴は消費する
-    let all_messages_string = history_messages
-        .into_iter()
-        .map(|message| message.content.to_string())
-        .collect::<String>();
-
-    // VoiceIDの指定を読み込み
     manage::utils::say(text.to_string());
 
-    // マークダウン整形
     let markdown_content = manage::utils::convert_markdown_to_html(text.as_str())?;
 
-    // トークン数・実行時間を算出し、整形する
     Ok(manage::utils::create_response(
         markdown_content.as_str(),
         set_model,
-        all_messages_string.as_str(),
-        src,
+        token_count,
         start_time,
     ))
 }
@@ -248,10 +228,11 @@ mod tests {
         let res = inner(use_model, body).await;
         match res {
             Ok(value) => {
-                let text = match get_content_for_gemini(&value) {
-                    Ok(text) => text,
-                    Err(e) => format!("Failed to get content: {}", e),
+                let (text, tokens) = match get_content_for_gemini(&value) {
+                    Ok(v) => v,
+                    Err(e) => (format!("Failed to get content: {}", e), 0),
                 };
+                println!("tokens: {}", tokens);
                 println!("response: {:?}", text);
                 // to temp file
                 let path = Path::new(r"D:\Download\response.txt");

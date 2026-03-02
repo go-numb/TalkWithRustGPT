@@ -63,8 +63,12 @@ export const App = () => {
   const [isUpload, setIsUpload] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const MAX_WIDTH = 512; // 例として512pxに設定
-  const MAX_HEIGHT = 512; // 例として512pxに設定
+  const IMAGE_SIZE_OPTIONS = [512, 1024, 2048];
+  const DEFAULT_IMAGE_SIZE = 1024;
+  const [imageMaxSize, setImageMaxSize] = useState<number>(() => {
+    const saved = localStorage.getItem("imageMaxSize");
+    return saved ? Number(saved) : DEFAULT_IMAGE_SIZE;
+  });
 
 
   const StatusNotSupport = "❌ Browser doesn't support speech recognition."
@@ -193,7 +197,7 @@ export const App = () => {
       .finally(() => {
         setIsLoading(false);
         reset_all_vers();
-        setQuery(`<h2 class="line_wrap">${prompt}</h2>\n`);
+        setQuery(`[image] ${prompt}`);
         if (!listening) {
           setStatus(StatusNone);
         }
@@ -215,7 +219,7 @@ export const App = () => {
       .finally(() => {
         setIsLoading(false);
         reset_all_vers();
-        setQuery(`<h2 class="line_wrap">historical messages RAW: ${isRaw}</h2>\n`);
+        setQuery(`[history] RAW: ${isRaw}`);
         if (!listening) {
           setStatus(StatusNone);
         }
@@ -450,15 +454,17 @@ export const App = () => {
             {query && (
 
               <Col span={24}>
-                <div
+                <h3
                   className="line_wrap"
                   title={query}
-                  dangerouslySetInnerHTML={{ __html: `<h3 class="line_wrap">${sliceText(query, 25)}<h3>` }}
                   onClick={() => {
                     navigator.clipboard.writeText(query);
                     messageApi.success("Copied to clipboard!");
                   }}
-                />
+                  style={{ cursor: "pointer" }}
+                >
+                  {sliceText(query, 25)}
+                </h3>
               </Col>
             )}
 
@@ -500,6 +506,17 @@ export const App = () => {
             form.setFieldValue("msg", value);
           }}
         />
+        {/* 画像最大サイズ設定 */}
+        <Select
+          value={imageMaxSize}
+          style={{ width: 120, flexShrink: 0 }}
+          title="画像リサイズ上限"
+          options={IMAGE_SIZE_OPTIONS.map(s => ({ label: `${s}px`, value: s }))}
+          onChange={(value) => {
+            setImageMaxSize(value);
+            localStorage.setItem("imageMaxSize", String(value));
+          }}
+        />
       </Flex>
 
       <Form
@@ -519,7 +536,7 @@ export const App = () => {
               e.preventDefault();
               const file = e.clipboardData.files[0];
               if (file) {
-                const base64 = await resizeImageAndConvertToBase64(file, MAX_WIDTH, MAX_HEIGHT);
+                const base64 = await resizeImageAndConvertToBase64(file, imageMaxSize, imageMaxSize);
                 setImageUrl(base64);
                 setIsUpload(false);
               }

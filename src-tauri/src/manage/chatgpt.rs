@@ -56,46 +56,26 @@ pub async fn chatgpt_request(
         Err(e) => return Err(format!("Request error: {}", e)),
     };
 
-    // get response message
-    let text = match manage::utils::get_content_for_chatgpt(&res) {
-        Ok(text) => text,
-        Err(e) => format!("Error: {}", e),
+    // get response message and token count
+    let (text, token_count) = match manage::utils::get_content_for_chatgpt(&res) {
+        Ok(v) => v,
+        Err(e) => (format!("Error: {}", e), 0),
     };
 
     // メッセージを履歴に追加
-    let history_messages = {
+    {
         let mut mut_shelf = state.lock().unwrap();
         mut_shelf.add_to_messages("assistant".to_string(), text.clone(), None);
-        let guard_shelf = mut_shelf.clone();
-        guard_shelf.get_messages()
-    };
+    }
 
-    // for (index, message) in history_messages.iter().enumerate() {
-    //     println!(
-    //         "{} - role: {}, content: {}",
-    //         index, message.role, message.content
-    //     );
-    // }
-
-    // Token数を算出するため
-    // 履歴は消費する
-    let all_messages_string = history_messages
-        .into_iter()
-        .map(|message| message.content.to_string())
-        .collect::<String>();
-
-    // VoiceIDの指定を読み込み
     manage::utils::say(text.to_string());
 
-    // マークダウン整形
     let markdown_content = manage::utils::convert_markdown_to_html(text.as_str())?;
 
-    // トークン数・実行時間を算出し、整形する
     Ok(manage::utils::create_response(
         markdown_content.as_str(),
         set_model.as_str(),
-        all_messages_string.as_str(),
-        src,
+        token_count,
         start_time,
     ))
 }
@@ -244,11 +224,11 @@ mod tests {
         let res = inner(body).await;
         match res {
             Ok(value) => {
-                let content = match get_content_for_chatgpt(&value) {
-                    Ok(content) => content,
-                    Err(e) => format!("Failed to get content: {}", e),
+                let (content, tokens) = match get_content_for_chatgpt(&value) {
+                    Ok(v) => v,
+                    Err(e) => (format!("Failed to get content: {}", e), 0),
                 };
-                println!("response: {}", content);
+                println!("response: {}, tokens: {}", content, tokens);
             }
             Err(e) => panic!("Failed to request: {}", e),
         }

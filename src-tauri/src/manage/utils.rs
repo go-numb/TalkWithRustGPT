@@ -5,8 +5,6 @@ use std::error::Error;
 use std::path::Path;
 use std::result::Result;
 
-use tiktoken_rs::cl100k_base;
-
 use markdown;
 
 use crate::sub;
@@ -69,19 +67,17 @@ pub fn get_file_type_by_extension(file_path: &str) -> Option<&str> {
     }
 }
 
-pub fn get_content_for_chatgpt(v: &Value) -> Result<String, String> {
-    // get choices[0].message.content to string
+pub fn get_content_for_chatgpt(v: &Value) -> Result<(String, u64), String> {
     let choices = v["choices"].as_array().ok_or("choices not found")?;
-
-    // check if choices is empty
     if choices.is_empty() {
         return Err("choices is empty".to_string());
     }
-
-    Ok(choices[0]["message"]["content"]
+    let text = choices[0]["message"]["content"]
         .as_str()
         .ok_or("content not found or not a string")?
-        .to_string())
+        .to_string();
+    let tokens = v["usage"]["total_tokens"].as_u64().unwrap_or(0);
+    Ok((text, tokens))
 }
 
 pub fn get_content_for_chatgpt_dell3(v: &Value) -> Result<(String, String), String> {
@@ -106,90 +102,72 @@ pub fn get_content_for_chatgpt_dell3(v: &Value) -> Result<(String, String), Stri
     Ok((prompt, url))
 }
 
-pub fn get_content_for_claude(v: &Value) -> Result<String, String> {
-    // Get content[0].text as a string
-    // Get the content array
+pub fn get_content_for_claude(v: &Value) -> Result<(String, u64), String> {
     let content = v["content"].as_array().ok_or("content not found")?;
-
-    // Check if the content array is empty
     if content.is_empty() {
         return Err("content is empty".to_string());
     }
-
-    // Get the text field from the first content item
     let text = content[0]["text"]
         .as_str()
-        .ok_or("text field not found or not a string")?;
-
-    Ok(text.to_string())
+        .ok_or("text field not found or not a string")?
+        .to_string();
+    let input = v["usage"]["input_tokens"].as_u64().unwrap_or(0);
+    let output = v["usage"]["output_tokens"].as_u64().unwrap_or(0);
+    Ok((text, input + output))
 }
 
-pub fn get_content_for_gemini(v: &Value) -> Result<String, String> {
-    // part.textを取得
-    // 'part.text'を取得
-    // println!("v: {:?}", v);
-    // 値を一度に確認して、unwrapするときにエラーメッセージを指定します
-    let result = v
+pub fn get_content_for_gemini(v: &Value) -> Result<(String, u64), String> {
+    let text = v
         .get("candidates")
-        .and_then(|candidates| candidates.get(0))
-        .and_then(|first_candidate| first_candidate.get("content"))
-        .and_then(|content| content.get("parts"))
-        .and_then(|parts| parts.get(0))
-        .and_then(|first_part| first_part.get("text"))
-        .ok_or(format!(
-            "part.text not found or not a string, error: {:?}",
-            v
-        ))?;
-
-    let result = result
+        .and_then(|c| c.get(0))
+        .and_then(|c| c.get("content"))
+        .and_then(|c| c.get("parts"))
+        .and_then(|p| p.get(0))
+        .and_then(|p| p.get("text"))
+        .ok_or(format!("part.text not found, error: {:?}", v))?
         .as_str()
         .expect("part.text is not a string")
         .to_string();
-
-    // 値が見つかった場合は、文字列に変換して返します
-    Ok(result)
+    let tokens = v["usageMetadata"]["totalTokenCount"].as_u64().unwrap_or(0);
+    Ok((text, tokens))
 }
 
 /// AIが出力したマークダウン用テキストをHTML出力する
+/// ammonia でXSS対策のサニタイズを行う
 pub fn convert_markdown_to_html(text: &str) -> Result<String, String> {
-    // KaTeXの数式をレンダリングする
-    // TODO
-
     let mut mathed_op = markdown::ParseOptions::gfm();
     mathed_op.constructs.math_flow = true;
     mathed_op.constructs.math_text = true;
     mathed_op.constructs.gfm_task_list_item = true;
     mathed_op.constructs.gfm_table = true;
 
-    markdown::to_html_with_options(
+    let html = markdown::to_html_with_options(
         text,
         &markdown::Options {
             compile: markdown::CompileOptions::default(),
             parse: mathed_op,
         },
     )
-    .map_err(|e| format!("markdown::to_html_with_options error: {}", e))
+    .map_err(|e| format!("markdown::to_html_with_options error: {}", e))?;
+
+    Ok(ammonia::clean(&html))
 }
 
 /// invokeへの返り値を作成する
 pub fn create_response(
     markdown_content: &str,
     set_model: &str,
-    tokenize_resource: &str,
-    src: &str,
+    token_count: u64,
     start: chrono::DateTime<chrono::Local>,
 ) -> String {
     let end = chrono::Local::now();
-    let bpe = cl100k_base().unwrap();
-    let tokens = bpe.encode_with_special_tokens([tokenize_resource, src].concat().as_str());
-    let msg = format!(
+    format!(
         "{}\n\nModel: {}, Total token: {}, Elaps: {}s",
         markdown_content,
         set_model,
-        tokens.len(),
+        token_count,
         end.signed_duration_since(start).num_seconds(),
-    );
-    msg
+    )
 }
 
 pub fn say(msg: String) -> bool {
@@ -229,6 +207,21 @@ pub fn say(msg: String) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_convert_markdown_strips_script_tags() {
+        let malicious = "hello\n\n<script>alert('xss')</script>\n\nworld";
+        let html = convert_markdown_to_html(malicious).unwrap();
+        assert!(!html.contains("<script>"), "script tag should be removed: {}", html);
+        assert!(!html.contains("alert("), "script content should be removed: {}", html);
+    }
+
+    #[test]
+    fn test_convert_markdown_strips_onerror_attribute() {
+        let malicious = "![img](x)<img src=x onerror=\"alert(1)\">";
+        let html = convert_markdown_to_html(malicious).unwrap();
+        assert!(!html.contains("onerror"), "onerror attribute should be removed: {}", html);
+    }
 
     #[tokio::test]
     async fn test_get_env() {
@@ -275,6 +268,36 @@ mod tests {
     }
 
     #[test]
+    fn test_get_content_for_chatgpt_returns_token_count() {
+        let v: Value = serde_json::from_str(r#"{
+            "choices": [{"message": {"role": "assistant", "content": "Hello"}}],
+            "usage": {"prompt_tokens": 9, "completion_tokens": 12, "total_tokens": 21}
+        }"#).unwrap();
+        let (_, tokens) = get_content_for_chatgpt(&v).unwrap();
+        assert_eq!(tokens, 21);
+    }
+
+    #[test]
+    fn test_get_content_for_claude_returns_token_count() {
+        let v: Value = serde_json::from_str(r#"{
+            "content": [{"type": "text", "text": "Hello"}],
+            "usage": {"input_tokens": 10, "output_tokens": 5}
+        }"#).unwrap();
+        let (_, tokens) = get_content_for_claude(&v).unwrap();
+        assert_eq!(tokens, 15);
+    }
+
+    #[test]
+    fn test_get_content_for_gemini_returns_token_count() {
+        let v: Value = serde_json::from_str(r#"{
+            "candidates": [{"content": {"parts": [{"text": "Hello"}]}}],
+            "usageMetadata": {"totalTokenCount": 30}
+        }"#).unwrap();
+        let (_, tokens) = get_content_for_gemini(&v).unwrap();
+        assert_eq!(tokens, 30);
+    }
+
+    #[test]
     fn test_get_content_for_chatgpt() {
         let v: Value = match serde_json::from_str(
             r#"{
@@ -304,12 +327,13 @@ mod tests {
         };
         assert!(v.is_object());
 
-        let content = match get_content_for_chatgpt(&v) {
-            Ok(content) => content,
+        let (content, tokens) = match get_content_for_chatgpt(&v) {
+            Ok(v) => v,
             Err(e) => panic!("Failed to get content: {}", e),
         };
 
         assert_eq!(content, "\n\nHello there, how may I assist you today?");
+        assert_eq!(tokens, 21);
     }
 
     #[test]
