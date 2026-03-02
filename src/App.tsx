@@ -61,6 +61,7 @@ export const App = () => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isUpload, setIsUpload] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const MAX_WIDTH = 512; // 例として512pxに設定
   const MAX_HEIGHT = 512; // 例として512pxに設定
@@ -190,6 +191,7 @@ export const App = () => {
         setStatus(`error: ${err}`);
       })
       .finally(() => {
+        setIsLoading(false);
         reset_all_vers();
         setQuery(`<h2 class="line_wrap">${prompt}</h2>\n`);
         if (!listening) {
@@ -211,6 +213,7 @@ export const App = () => {
         setStatus(`error: ${err}`);
       })
       .finally(() => {
+        setIsLoading(false);
         reset_all_vers();
         setQuery(`<h2 class="line_wrap">historical messages RAW: ${isRaw}</h2>\n`);
         if (!listening) {
@@ -220,6 +223,8 @@ export const App = () => {
   }
 
   const to_request = async (req: string) => {
+    if (isLoading) return;
+
     const request_message = req === "" ? form.getFieldValue("msg") : req;
 
     console.debug(request_message);
@@ -228,6 +233,7 @@ export const App = () => {
       setResult("Please enter a msg.");
       return;
     }
+    setIsLoading(true);
     setStatus(StatusThinking);
 
     // コマンドの処理
@@ -272,19 +278,18 @@ export const App = () => {
         setStatus(`error: ${err}`);
       })
       .finally(() => {
+        setIsLoading(false);
         reset_all_vers();
         setQuery(`Q: ${request_message}`);
         if (!listening) {
           setStatus(StatusNone);
         }
-
-        // 
       });
   }
 
-  const reset_messages = () => {
-    memo();
-    invoke("reset");
+  const reset_messages = async () => {
+    await memo();
+    await invoke("reset");
     setQuery("");
     setImageUrls([]);
     setStatus(StatusResetMessages);
@@ -534,7 +539,7 @@ export const App = () => {
         </Flex>
 
         <Form.Item wrapperCol={{ offset: 21, span: 3 }}>
-          <Button type="primary" htmlType="submit">
+          <Button type="primary" htmlType="submit" loading={isLoading} disabled={isLoading}>
             SEND
           </Button>
         </Form.Item>

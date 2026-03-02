@@ -131,6 +131,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_request_system_overwrites_previous_system_prompt() {
+        // request_system を2回呼んだとき、system_messages は1件だけになるべき
+        let mut shelf = Shelf::new();
+        shelf.system_messages.add("system".to_string(), "be strict".to_string(), None);
+        // 2回目の呼び出しで上書きされることを期待
+        shelf.system_messages.reset();
+        shelf.system_messages.add("system".to_string(), "be friendly".to_string(), None);
+
+        assert_eq!(shelf.system_messages.get().len(), 1);
+        assert_eq!(shelf.system_messages.get()[0].content, "be friendly");
+    }
+
+    #[test]
     fn test_get_system_returns_system_messages_not_messages() {
         let mut shelf = Shelf::new();
         shelf.add_to_messages("user".to_string(), "hello".to_string(), None);

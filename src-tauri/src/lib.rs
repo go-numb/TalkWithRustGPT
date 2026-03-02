@@ -107,6 +107,7 @@ fn request_system(
 
     let mut shelf = state.lock().unwrap();
 
+    shelf.system_messages.reset();
     shelf
         .system_messages
         .add("system".to_string(), prompt, None);
