@@ -31,16 +31,17 @@ pub struct Keys {
     pub openai_token: String,
     pub google_key: String,
     #[allow(unused)]
-    pub voice_id: i16,
+    pub voice_id: Option<i16>,
 }
 
 /// 必要な環境変数を取得する
+/// VOICEID は省略可能。未設定または不正値の場合は None
 pub async fn get_env() -> Result<Keys, Box<dyn Error>> {
     dotenv().ok();
     let anthropic_key = env::var("ANTHROPIC_API_KEY")?;
     let openai_token = env::var("CHATGPTTOKEN")?;
     let google_key = env::var("GOOGLE_GEMINI_API_KEY")?;
-    let voice_id = env::var("VOICEID")?.parse()?;
+    let voice_id = env::var("VOICEID").ok().and_then(|v| v.parse().ok());
 
     Ok(Keys {
         anthropic_key,
@@ -250,7 +251,27 @@ mod tests {
             "openai_token is empty, {}",
             keys.openai_token
         );
-        assert!(keys.voice_id > 0, "voice_id is wrong, {}", keys.voice_id);
+        // VOICEID は省略可能なので None も有効
+        if let Some(id) = keys.voice_id {
+            assert!(id > 0, "voice_id is wrong, {}", id);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_env_succeeds_without_voiceid() {
+        // VOICEID を未設定の状態で get_env() がエラーにならないことを確認
+        std::env::remove_var("VOICEID");
+        std::env::set_var("ANTHROPIC_API_KEY", "dummy_anthropic");
+        std::env::set_var("CHATGPTTOKEN", "dummy_openai");
+        std::env::set_var("GOOGLE_GEMINI_API_KEY", "dummy_google");
+
+        let result = get_env().await;
+        assert!(result.is_ok(), "VOICEID 未設定時に get_env() が失敗した: {:?}", result.err());
+
+        // 後片付け
+        std::env::remove_var("ANTHROPIC_API_KEY");
+        std::env::remove_var("CHATGPTTOKEN");
+        std::env::remove_var("GOOGLE_GEMINI_API_KEY");
     }
 
     #[test]

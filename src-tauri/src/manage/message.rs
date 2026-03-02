@@ -40,7 +40,7 @@ impl Shelf {
 
     #[allow(unused)]
     pub fn get_system(&self) -> Vec<Message> {
-        self.messages.get()
+        self.system_messages.get()
     }
 
     pub fn add_to_messages(&mut self, role: String, content: String, src: Option<String>) {
@@ -124,6 +124,23 @@ pub struct Message {
     pub content: String,
     // image/file base64 source data
     pub src: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_system_returns_system_messages_not_messages() {
+        let mut shelf = Shelf::new();
+        shelf.add_to_messages("user".to_string(), "hello".to_string(), None);
+        shelf.system_messages.add("system".to_string(), "be strict".to_string(), None);
+
+        let system = shelf.get_system();
+        assert_eq!(system.len(), 1);
+        assert_eq!(system[0].content, "be strict");
+        assert_eq!(system[0].role, "system");
+    }
 }
 
 impl Messages {

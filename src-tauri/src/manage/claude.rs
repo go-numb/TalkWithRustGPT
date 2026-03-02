@@ -124,7 +124,7 @@ pub async fn claude_request(
 pub fn model() -> (String, String) {
     let (mut high_model, mut low_model) = utils::model_high_and_low("CLAUDE_MODELS");
     high_model = if high_model.is_empty() {
-        String::from("claude-3-7-sonnet,")
+        String::from("claude-3-7-sonnet-latest")
     } else {
         high_model
     };
@@ -194,6 +194,13 @@ pub async fn inner(body: Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use crate::manage::utils::get_content_for_claude;
+
+    #[test]
+    fn test_default_model_names_have_no_trailing_comma() {
+        let (high, low) = super::model();
+        assert!(!high.ends_with(','), "high model has trailing comma: {:?}", high);
+        assert!(!low.ends_with(','), "low model has trailing comma: {:?}", low);
+    }
 
     use super::*;
     use serde_json::json;
