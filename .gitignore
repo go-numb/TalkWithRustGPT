@@ -27,3 +27,6 @@ dist-ssr
 
 # my files
 src-tauri/_data
+
+# Tauri v2 auto-generated
+src-tauri/gen/
