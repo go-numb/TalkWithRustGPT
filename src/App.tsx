@@ -40,9 +40,11 @@ import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognitio
 
 import hljs from 'highlight.js';
 import 'highlight.js/styles/default.css';
+import 'katex/dist/katex.min.css';
 import { DrugComponent } from "./components/drug";
 import { ImageComponent, resizeImageAndConvertToBase64 } from "./components/image";
 import { sliceText } from "./common/string";
+import { renderMath } from "./common/math";
 
 type Fields = {
   b?: number;
@@ -473,7 +475,7 @@ export const App = () => {
               <Col span={24}>
                 <div
                   className="code-container markdown-body"
-                  dangerouslySetInnerHTML={{ __html: result }}
+                  dangerouslySetInnerHTML={{ __html: renderMath(result) }}
                 />
               </Col>
 
