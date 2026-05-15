@@ -28,6 +28,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import "./App.css";
 import { Flex, Space, Row, Col, Button, Select, Image, Form, Input, Typography, message } from "antd";
 const { TextArea } = Input;
@@ -475,6 +476,15 @@ export const App = () => {
               <Col span={24}>
                 <div
                   className="code-container markdown-body"
+                  onClick={(e) => {
+                    const anchor = (e.target as HTMLElement).closest("a");
+                    if (anchor && anchor.href) {
+                      e.preventDefault();
+                      openUrl(anchor.href).catch(() => {
+                        /* opener が失敗しても WebView は遷移させない */
+                      });
+                    }
+                  }}
                   dangerouslySetInnerHTML={{ __html: renderMath(result) }}
                 />
               </Col>
