@@ -78,10 +78,8 @@ pub async fn claude_request(
     };
 
     // get response message and token count
-    let (text, token_count) = match manage::utils::get_content_for_claude(&res) {
-        Ok(v) => v,
-        Err(e) => (format!("Error: {}", e), 0),
-    };
+    let (text, token_count) =
+        manage::utils::get_content_for_claude(&res).map_err(|e| format!("Error: {}", e))?;
 
     // メッセージを履歴に追加
     {

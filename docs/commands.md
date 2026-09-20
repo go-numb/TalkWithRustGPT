@@ -104,9 +104,25 @@ invoke("memo") => Promise<string>
 
 ---
 
+## `memo_and_reset`
+
+現在の会話を保存し、成功した場合だけ会話履歴とシステムプロンプトをリセットします。
+画面の削除ボタンはこのコマンドを使用します。保存とリセットは同じロック内で実行します。
+
+```typescript
+invoke("memo_and_reset") => Promise<string>
+```
+
+- 成功時は `"success reset messages"` を返します。
+- 保存に失敗すると Promise が reject され、会話履歴とシステムプロンプトは保持されます。
+- 会話履歴が空の場合はファイルを作成せず、システムプロンプトをリセットします。
+
+---
+
 ## `reset`
 
-会話履歴 (通常メッセージ + システムプロンプト) をリセットします。
+保存せずに会話履歴 (通常メッセージ + システムプロンプト) をリセットします。
+会話を保存してからリセットする場合は `memo_and_reset` を使用してください。
 
 ```typescript
 invoke("reset") => Promise<string>

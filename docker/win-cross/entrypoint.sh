@@ -5,6 +5,8 @@ SRC_DIR="${SRC_DIR:-/src}"
 OUT_DIR="${OUT_DIR:-/out}"
 BUILD_DIR="${BUILD_DIR:-/build}"
 TARGET="${TARGET:-x86_64-pc-windows-gnu}"
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-/cache/target}"
+export CARGO_TARGET_DIR
 
 echo "[1/4] Prepare build dir..."
 rm -rf "$BUILD_DIR"
@@ -35,7 +37,7 @@ export TAURI_SKIP_UPDATE_CHECK=1
 npm run tauri build -- --target "$TARGET" --no-bundle
 
 echo "[4/4] Collect artifacts..."
-EXE_DIR="src-tauri/target/${TARGET}/release"
+EXE_DIR="${CARGO_TARGET_DIR}/${TARGET}/release"
 shopt -s nullglob
 EXES=("${EXE_DIR}"/*.exe)
 
@@ -55,7 +57,7 @@ find_dll() {
 
   # Prefer build output (e.g., WebView2Loader.dll produced by a build script)
   local from_build
-  from_build="$(find "src-tauri/target/${TARGET}" -type f -name "${dll_name}" -print -quit 2>/dev/null || true)"
+  from_build="$(find "${CARGO_TARGET_DIR}/${TARGET}" -type f -name "${dll_name}" -print -quit 2>/dev/null || true)"
   if [ -n "${from_build}" ]; then
     echo "${from_build}"
     return 0
@@ -92,6 +94,7 @@ fi
 #    This makes the produced folder runnable on a clean Windows machine.
 collect_deps_for_exe() {
   local exe_path="$1"
+  local missing_dependency=0
 
   if ! command -v x86_64-w64-mingw32-objdump >/dev/null 2>&1; then
     echo "WARN: objdump not available; skipping dependency collection for ${exe_path}" >&2
@@ -108,7 +111,7 @@ collect_deps_for_exe() {
   for dll in "${deps[@]}"; do
     # Skip Windows system DLLs
     case "${dll^^}" in
-      KERNEL32.DLL|USER32.DLL|GDI32.DLL|SHELL32.DLL|ADVAPI32.DLL|OLE32.DLL|OLEAUT32.DLL|COMDLG32.DLL|COMCTL32.DLL|SHLWAPI.DLL|WS2_32.DLL|WINMM.DLL|VERSION.DLL|CRYPT32.DLL|UXTHEME.DLL|DWMAPI.DLL|IMM32.DLL|NTDLL.DLL)
+      API-MS-WIN-*.DLL|KERNEL32.DLL|USER32.DLL|GDI32.DLL|SHELL32.DLL|ADVAPI32.DLL|OLE32.DLL|OLEAUT32.DLL|COMDLG32.DLL|COMCTL32.DLL|SHLWAPI.DLL|WS2_32.DLL|WINMM.DLL|VERSION.DLL|CRYPT32.DLL|UXTHEME.DLL|DWMAPI.DLL|IMM32.DLL|NTDLL.DLL|BCRYPT.DLL|BCRYPTPRIMITIVES.DLL|MSVCRT.DLL|NCRYPT.DLL|PROPSYS.DLL|SECUR32.DLL|USERENV.DLL)
         continue
         ;;
     esac
@@ -120,13 +123,28 @@ collect_deps_for_exe() {
 
     if dll_path="$(find_dll "${dll}" 2>/dev/null)"; then
       cp -fv "${dll_path}" "${OUT_DIR}/${dll}"
+    else
+      echo "ERROR: required runtime dependency was not found: ${dll}" >&2
+      missing_dependency=1
     fi
   done
+
+  return "${missing_dependency}"
 }
 
+missing_dependencies=0
 for exe in "${EXES[@]}"; do
-  collect_deps_for_exe "${exe}"
+  if ! collect_deps_for_exe "${exe}"; then
+    missing_dependencies=1
+  fi
 done
+
+if [ "${missing_dependencies}" -ne 0 ]; then
+  exit 1
+fi
+
+CHECKSUM_INPUTS=("${OUT_DIR}"/*.exe "${OUT_DIR}"/*.dll)
+(cd "${OUT_DIR}" && sha256sum -- "${CHECKSUM_INPUTS[@]##*/}") > "${OUT_DIR}/SHA256SUMS"
 
 echo "OK: copied to ${OUT_DIR}"
 ls -la "${OUT_DIR}"

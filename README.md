@@ -80,6 +80,15 @@ chmod +x scripts/build-win-exe.sh
 
 ### Output
 - `artifacts/windows/*.exe`
+- 実行に必要な `*.dll`
+- 改ざん・転送確認用の `artifacts/windows/SHA256SUMS`
+
+ビルド前に出力ディレクトリ内の古いファイルを削除し、必要なランタイム DLL が
+見つからない場合は成功扱いにしません。Docker の DNS は既定で ExpressVPN の
+トンネルゲートウェイ (`100.64.100.1`) を使い、
+必要に応じて `DOCKER_DNS` 環境変数で変更できます。
+依存パッケージとRustのビルド成果物はDocker named volumeへキャッシュするため、
+2回目以降は差分のみを再ビルドします。
 
 ※ MSI/NSIS などの Windows インストーラ生成は、基本的に Windows 環境での `cargo tauri build` が必要です。
 

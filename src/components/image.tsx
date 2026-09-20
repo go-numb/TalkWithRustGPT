@@ -27,6 +27,7 @@ export const resizeImageAndConvertToBase64 = (file: File, maxWidth: number, maxH
         const reader = new FileReader();
         reader.onload = (event) => {
             const img: HTMLImageElement = document.createElement("img");
+            img.onerror = () => reject(new Error('Failed to decode image'));
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
@@ -55,6 +56,7 @@ export const resizeImageAndConvertToBase64 = (file: File, maxWidth: number, maxH
         reader.onerror = (error) => {
             reject(new Error('Failed to read file: ' + error));
         };
+        reader.onabort = () => reject(new Error('Image read was cancelled'));
         reader.readAsDataURL(file);
     });
 };

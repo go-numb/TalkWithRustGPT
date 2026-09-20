@@ -46,6 +46,7 @@ import { DrugComponent } from "./components/drug";
 import { ImageComponent, resizeImageAndConvertToBase64 } from "./components/image";
 import { sliceText } from "./common/string";
 import { renderMath } from "./common/math";
+import { RequestQueue } from "./common/requestQueue";
 
 type Fields = {
   b?: number;
@@ -57,14 +58,32 @@ interface ResponseImage {
   url: string;
 }
 
+interface ChatRequest {
+  readonly msg: string;
+  readonly src: string;
+  readonly ai: number;
+  readonly model: number;
+}
+
+const AI_NAMES = ["Claude", "ChatGPT", "Gemini"];
+
 export const App = () => {
   const [messageApi, contextHolder] = message.useMessage();
   const [form] = Form.useForm();
   const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [isUpload, setIsUpload] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isResetting, setIsResetting] = useState(false);
+  // React の再描画前の連打や、音声送信とリセットの競合も防ぐ。
+  const isBusyRef = useRef(false);
+  const [requestQueue] = useState(() => new RequestQueue<ChatRequest>());
+  const [queuedRequest, setQueuedRequest] = useState<ChatRequest | null>(null);
+  const [failedRequest, setFailedRequest] = useState<ChatRequest | null>(null);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const imageProcessingRef = useRef(false);
+
+  useEffect(() => () => { requestQueue.cancel(); }, [requestQueue]);
 
   const IMAGE_SIZE_OPTIONS = [512, 1024, 2048];
   const DEFAULT_IMAGE_SIZE = 1024;
@@ -74,13 +93,12 @@ export const App = () => {
   });
 
 
-  const StatusNotSupport = "❌ Browser doesn't support speech recognition."
-  const StatusAvailable = "❌ Microphone function is off, access to microphone is required."
+  const StatusNotSupport = "この環境では音声入力に対応していません。テキスト入力は利用できます。"
+  const StatusMicrophoneUnavailable = "マイクが利用できません。テキスト入力は利用できます。音声入力を使うには、マイクの設定・権限を確認してアプリを再起動してください。"
 
   const StatusNone = ""
   const StatusListen = "🎧 Listening..."
-  const StatusStop = "🎧 Stoped listening."
-  const StatusStart = "🎧 Start listening."
+  const StatusStop = "🎧 Stopped listening."
   const StatusThinking = "🤖 Thinking..."
   const StatusModelLow = "🤖 Switch to model Economical."
   const StatusModelHigh = "🤖 Switch to model Performance."
@@ -96,6 +114,11 @@ export const App = () => {
     browserSupportsSpeechRecognition,
     isMicrophoneAvailable,
   } = useSpeechRecognition();
+
+  const speechUnavailableMessage = !browserSupportsSpeechRecognition
+    ? StatusNotSupport
+    : !isMicrophoneAvailable ? StatusMicrophoneUnavailable : "";
+  const voiceIsActive = listening && !speechUnavailableMessage;
 
   const [query, setQuery] = useState("");
   const [result, setResult] = useState("");
@@ -136,47 +159,41 @@ export const App = () => {
     });
   }, [result]);
 
-  if (!browserSupportsSpeechRecognition) {
-    setStatus(StatusNotSupport);
-    return <span>{StatusNotSupport}</span>;
-  }
-
-  if (!isMicrophoneAvailable) {
-    setStatus(StatusAvailable);
-    return <span>{StatusAvailable}</span>;
-  }
-
-  const speech = () => {
-    if (!listening) {
-      SpeechRecognition.startListening({
-        language: 'ja',
-        continuous: true
-      });
-      setStatus(StatusStart);
+  useEffect(() => {
+    if (voiceIsActive) {
+      setStatus(StatusListen);
     } else {
-      resetTranscript();
-      SpeechRecognition.startListening({
-        language: 'ja',
-        continuous: false
-      });
-      SpeechRecognition.stopListening();
-      setStatus(StatusStop);
+      setStatus((previous) => previous === StatusListen ? StatusNone : previous);
+    }
+  }, [voiceIsActive]);
+
+  const speech = async () => {
+    if (speechUnavailableMessage || requestQueue.pending) return;
+
+    try {
+      if (voiceIsActive) {
+        await SpeechRecognition.stopListening();
+        resetTranscript();
+        setStatus(StatusStop);
+      } else {
+        await SpeechRecognition.startListening({
+          language: 'ja',
+          continuous: true
+        });
+      }
+    } catch (err) {
+      setStatus(`音声入力を切り替えられませんでした: ${String(err)}`);
     }
   }
 
   useEffect(() => { // 音声認識が開始されたら、入力フォームにフォーカス
-    if (listening) {
-      setStatus(StatusListen);
-
+    if (voiceIsActive && !requestQueue.pending) {
       let set_text = transcript;
       form.setFieldValue("msg", set_text);
 
       let [is_there, command] = is_command_enter(set_text);
       if (is_there) {
         console.debug("command enter");
-        resetTranscript();
-
-
         let reqest = set_text.replace(command, "");
         to_request(reqest);
       }
@@ -198,12 +215,10 @@ export const App = () => {
         setStatus(`error: ${err}`);
       })
       .finally(() => {
+        isBusyRef.current = false;
         setIsLoading(false);
-        reset_all_vers();
         setQuery(`[image] ${prompt}`);
-        if (!listening) {
-          setStatus(StatusNone);
-        }
+        setStatus((previous) => previous === StatusThinking ? StatusNone : previous);
       });
   }
 
@@ -220,98 +235,122 @@ export const App = () => {
         setStatus(`error: ${err}`);
       })
       .finally(() => {
+        isBusyRef.current = false;
         setIsLoading(false);
-        reset_all_vers();
         setQuery(`[history] RAW: ${isRaw}`);
-        if (!listening) {
-          setStatus(StatusNone);
-        }
+        setStatus((previous) => previous === StatusThinking ? StatusNone : previous);
       });
   }
 
+  const send_chat = async (initial: ChatRequest) => {
+    let currentRequest = initial;
+    setFailedRequest(null);
+    try {
+      await requestQueue.run(initial, async (request) => {
+        currentRequest = request;
+        // A reserved draft is consumed only when its request actually starts.
+        setQueuedRequest(null);
+        clearSubmittedDraft(true);
+        setStatus(StatusThinking);
+        if (request.src) setImageUrls((previous) => [...previous, request.src]);
+
+        const command = request.ai === 0 ? "claude_request"
+          : request.ai === 1 ? "chatgpt_request" : "gemini_request";
+        const response = await invoke<string>(command, {
+          b: request.model, msg: request.msg, src: request.src,
+        });
+        setResult(response);
+        setResultImageUrl(null);
+        setQuery(`Q: ${request.msg}`);
+      });
+      setStatus((previous) => previous === StatusThinking ? StatusNone : previous);
+    } catch (err) {
+      // The backend may already contain the failed user message; never retry automatically.
+      setFailedRequest(currentRequest);
+      setStatus(`送信に失敗しました。送信予約は解除され、下書きは保持されています: ${String(err)}`);
+    } finally {
+      setQueuedRequest(null);
+      isBusyRef.current = false;
+      setIsLoading(false);
+    }
+  };
+
   const to_request = async (req: string) => {
-    if (isLoading) return;
+    if (requestQueue.pending || imageProcessingRef.current) return;
+    if (isBusyRef.current && !requestQueue.isRunning) return;
 
-    const request_message = req === "" ? form.getFieldValue("msg") : req;
-
-    console.debug(request_message);
-
-    if (request_message === "") {
-      setResult("Please enter a msg.");
+    const request_message = req === "" ? (form.getFieldValue("msg") || "") : req;
+    const command = request_message.trim();
+    if (command === "") {
+      messageApi.info("メッセージを入力してください。");
       return;
     }
+
+    const isImageCommand = /^\/image(?:\s|$)/.test(command);
+    const isLocalCommand = command === "/raw" || command === "/all" || isImageCommand;
+    const request: ChatRequest = { msg: request_message, src: imageUrl || "", ai: AI, model };
+
+    if (requestQueue.isRunning) {
+      if (isLocalCommand) {
+        messageApi.info("コマンドは予約できません。応答が完了してから実行してください。");
+        return;
+      }
+      if (requestQueue.reserve(request)) {
+        form.setFieldValue("msg", request.msg);
+        setQueuedRequest(request);
+        if (voiceIsActive) {
+          SpeechRecognition.stopListening().then(resetTranscript).catch((err) => {
+            setStatus(`音声入力を停止できませんでした: ${String(err)}`);
+          });
+        }
+      }
+      return;
+    }
+
+    isBusyRef.current = true;
     setIsLoading(true);
     setStatus(StatusThinking);
 
-    // コマンドの処理
-    const command = request_message.trim();
-    if (command === "/raw") {
-      // マークダウン整形せず出力
-      get_all_messages(true);
-      return;
-    } else if (command === "/all") {
-      // マークダウン整形して出力
-      get_all_messages(false);
-      return;
-    } else if (command.includes("/image")) {
-      // remove /dell3
-      const prompt = command.replace("/image", "");
-      get_image_to_dell3(prompt);
+    if (isLocalCommand) {
+      // These commands do not consume an attached image.
+      clearSubmittedDraft(false);
+      if (command === "/raw" || command === "/all") {
+        get_all_messages(command === "/raw");
+      } else {
+        get_image_to_dell3(command.slice("/image".length).trim());
+      }
       return;
     }
 
-    let src = "";
-    if (imageUrl && !isUpload) {
-      src = imageUrl;
-      setImageUrls((prev) => [...prev, imageUrl]);
-
-      setIsUpload(true);
-      setImageUrl(null);
-    }
-
-    const to_invoke = AI === 0 ? "claude_request" : AI === 1 ? "chatgpt_request" : "gemini_request";
-    console.log(`invoke: ${to_invoke}`);
-
-
-    invoke(to_invoke, { b: model, msg: request_message, src: src })
-      .then((res: any) => { // Add type annotation to 'res'
-        console.debug(res);
-
-        setResult(`${res}`);
-      })
-      .catch((err: any) => {
-        console.error(`gemini_request > ${err}`);
-
-        setStatus(`error: ${err}`);
-      })
-      .finally(() => {
-        setIsLoading(false);
-        reset_all_vers();
-        setQuery(`Q: ${request_message}`);
-        if (!listening) {
-          setStatus(StatusNone);
-        }
-      });
-  }
-
-  const reset_messages = async () => {
-    await memo();
-    await invoke("reset");
-    setQuery("");
-    setImageUrls([]);
-    setStatus(StatusResetMessages);
+    await send_chat(request);
   };
 
-  // リセット及びクローズとともにメモを作成する
-  const memo = () => {
-    invoke("memo")
-      .then((message: any) => {
-        setResult(`${message}`);
-      })
-      .catch((err: any) => {
-        console.error(`memo > ${err}`);
-        setResult(err);
-      });
+  const cancel_reservation = () => {
+    requestQueue.cancel();
+    setQueuedRequest(null);
+    inputRef.current?.focus();
+  };
+
+  const reset_messages = async () => {
+    if (isBusyRef.current) return;
+
+    isBusyRef.current = true;
+    setIsResetting(true);
+    setStatus("📝 Saving conversation...");
+    try {
+      await invoke("memo_and_reset");
+      setQuery("");
+      setResult("");
+      setImageUrls([]);
+      setResultImageUrl(null);
+      setFailedRequest(null);
+      setStatus(StatusResetMessages);
+    } catch (err) {
+      setStatus(`保存に失敗しました。会話履歴は保持されています: ${String(err)}`);
+    } finally {
+      isBusyRef.current = false;
+      setIsResetting(false);
+    }
   };
 
   const switch_model = () => {
@@ -344,19 +383,12 @@ export const App = () => {
     });
   }
 
-  // Usefull functions
-  const reset_all_vers = () => {
-    console.debug("reset_all_vers");
-
+  const clearSubmittedDraft = (includeImage: boolean) => {
     resetTranscript();
-    setImageUrl(null);
+    if (includeImage) setImageUrl(null);
     form.setFieldValue("msg", "");
-
-    // 画面のスクロールを最上部に移動
-    window.scrollTo(0, 0);
-    // カーソルをtextareaに移動
     inputRef.current?.focus();
-  }
+  };
 
   const is_command_enter = (str: string): [Boolean, string] => {
     let command_str = str;
@@ -397,6 +429,7 @@ export const App = () => {
   }
 
   const onDrop = (insertStr: string): void => {
+    if (requestQueue.pending) return;
     console.debug("onDrop from component: ", insertStr);
     // 厳格に、insertStrが既に含まれていない場合のみ追加
     const prevMsg = (form.getFieldValue("msg") as string) || "";
@@ -412,14 +445,15 @@ export const App = () => {
       <DrugComponent onFileDrop={onDrop} />
       {/* 上部固定 */}
       <Flex className="fixed-left-bottom" gap="large" justify="end" align="center" vertical={false} >
-        <Image
-          height={40}
-          src="/delete.png"
+        <Button
+          type="text"
           onClick={reset_messages}
-          alt="reset message logo"
+          disabled={isLoading || isResetting}
+          aria-label="Save and reset conversation"
           title="reset messages & save to file"
           className="reset message"
-          preview={false}
+          style={{ height: 40, padding: 0 }}
+          icon={<img height={40} src="/delete.png" alt="" />}
         />
         <Image
           height={40}
@@ -439,14 +473,17 @@ export const App = () => {
           className="switch ai"
           preview={false}
         />
-        <Image
-          height={40}
-          src="/vc.png"
+        <Button
+          type="text"
           onClick={speech}
-          alt="vc logo"
-          title="start/end vc for message"
+          disabled={Boolean(speechUnavailableMessage) || Boolean(queuedRequest)}
+          aria-label={voiceIsActive ? "Stop voice input" : "Start voice input"}
+          aria-pressed={voiceIsActive}
+          aria-describedby={speechUnavailableMessage ? "voice-unavailable" : undefined}
+          title={speechUnavailableMessage || "start/end vc for message"}
           className="vc"
-          preview={false}
+          style={{ height: 40, padding: 0 }}
+          icon={<img height={40} src="/vc.png" alt="" />}
         />
       </Flex>
 
@@ -501,11 +538,12 @@ export const App = () => {
       <Flex gap="large" justify="space-between">
         {/* 用途による文面を自動挿入 */}
         <Select
+          disabled={Boolean(queuedRequest)}
           defaultValue={prompts_list[0].label}
           style={{ width: "100%" }}
           options={prompts_list}
           onChange={(value) => {
-            if (!value || value === "None") return;
+            if (requestQueue.pending || !value || value === "None") return;
 
             // Rust側にリクエストを送信
             // Rust処理（リクエスト・出力）と、GUI文字挿入がある。
@@ -531,6 +569,12 @@ export const App = () => {
         />
       </Flex>
 
+      {speechUnavailableMessage && (
+        <Typography.Text id="voice-unavailable" type="secondary" role="status">
+          {speechUnavailableMessage}
+        </Typography.Text>
+      )}
+
       <Form
         name="basic"
         form={form}
@@ -542,15 +586,31 @@ export const App = () => {
           <TextArea
             ref={inputRef}
             rows={4}
-            placeholder="Enter a msg..."
+            placeholder={isLoading ? "次の質問を入力できます…" : "Enter a msg..."}
+            readOnly={Boolean(queuedRequest)}
             onPasteCapture={async (e) => {
+              if (requestQueue.pending) {
+                e.preventDefault();
+                return;
+              }
               if (!e.clipboardData.files.length) return;
               e.preventDefault();
+              if (imageProcessingRef.current) return;
               const file = e.clipboardData.files[0];
-              if (file) {
+              if (!file.type.startsWith("image/")) {
+                messageApi.error("画像ファイルを貼り付けてください。");
+                return;
+              }
+              imageProcessingRef.current = true;
+              setIsProcessingImage(true);
+              try {
                 const base64 = await resizeImageAndConvertToBase64(file, imageMaxSize, imageMaxSize);
                 setImageUrl(base64);
-                setIsUpload(false);
+              } catch (err) {
+                messageApi.error(`画像を読み込めませんでした: ${String(err)}`);
+              } finally {
+                imageProcessingRef.current = false;
+                setIsProcessingImage(false);
               }
             }}
           />
@@ -567,9 +627,37 @@ export const App = () => {
           </Row>
         </Flex>
 
-        <Form.Item wrapperCol={{ offset: 21, span: 3 }}>
-          <Button type="primary" htmlType="submit" loading={isLoading} disabled={isLoading}>
-            SEND
+        {failedRequest && (
+          <details>
+            <summary>送信に失敗した質問</summary>
+            <Typography.Paragraph copyable={{ text: failedRequest.msg }} style={{ whiteSpace: "pre-wrap" }}>
+              {failedRequest.msg}
+            </Typography.Paragraph>
+            {failedRequest.src && <ImageComponent images={[failedRequest.src]} size={200} />}
+          </details>
+        )}
+        {queuedRequest && (
+          <Flex gap="small" align="center" justify="space-between" wrap>
+            <Typography.Text role="status">
+              送信予約: {AI_NAMES[queuedRequest.ai]} / {queuedRequest.model === 1 ? "高性能" : "経済"}
+            </Typography.Text>
+            <Button onClick={cancel_reservation}>予約を取り消して編集</Button>
+          </Flex>
+        )}
+        {isProcessingImage && <Typography.Text role="status">画像を準備中…</Typography.Text>}
+        {isLoading && requestQueue.isRunning && !queuedRequest && (
+          <Typography.Text type="secondary" role="status">
+            回答を待っています。次の質問を1件予約できます。
+          </Typography.Text>
+        )}
+        <Form.Item style={{ textAlign: "right" }}>
+          <Button
+            type="primary"
+            htmlType="submit"
+            loading={isLoading && !requestQueue.isRunning}
+            disabled={isResetting || Boolean(queuedRequest) || isProcessingImage || (isLoading && !requestQueue.isRunning)}
+          >
+            {queuedRequest ? "予約済み" : requestQueue.isRunning ? "次に送信" : "SEND"}
           </Button>
         </Form.Item>
       </Form>

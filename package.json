@@ -1,9 +1,10 @@
 {
   "name": "talkwithrustv2",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.10",
   "type": "module",
   "scripts": {
+    "test": "node --test tests/requestQueue.test.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",

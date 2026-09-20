@@ -31,6 +31,7 @@ pub fn run() {
             manage::chatgpt::chatgpt_request_to_dell3,
             manage::gemini::gemini_request,
             memo,
+            memo_and_reset,
             all_messages,
             files_to_string,
         ])
@@ -71,6 +72,14 @@ fn memo(state: State<'_, Arc<Mutex<manage::message::Shelf>>>) -> String {
     }
 }
 
+#[tauri::command]
+fn memo_and_reset(state: State<'_, Arc<Mutex<manage::message::Shelf>>>) -> Result<String, String> {
+    let mut shelf = state.lock().map_err(|e| e.to_string())?;
+    // 保存とリセットの間に、別の操作が会話履歴を変更しないようロックを保持する。
+    shelf.save_and_reset()?;
+    Ok("success reset messages".to_string())
+}
+
 fn memo_for_ended(state: Arc<Mutex<manage::message::Shelf>>) -> String {
     let mut shelf = state.lock().unwrap();
 
@@ -80,11 +89,8 @@ fn memo_for_ended(state: Arc<Mutex<manage::message::Shelf>>) -> String {
         return "no messages".to_string();
     }
 
-    match shelf.memo() {
-        Ok(_) => {
-            shelf.reset().unwrap();
-            "memo is success".to_string()
-        }
+    match shelf.save_and_reset() {
+        Ok(_) => "memo is success".to_string(),
         Err(e) => format!("memo error: {}", e),
     }
 }
