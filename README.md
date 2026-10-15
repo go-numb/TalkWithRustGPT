@@ -34,6 +34,7 @@ API: Google Gemini with image
 - [x] get command for all messages
 - [x] command matome & save(use filename from first #tag)
 - [x] textfile drug and drop, insert message.
+- [x] read AI answers aloud with Gemini TTS (female / male voice)
 
 ## Required
 set env CHATGPTTOKEN  
@@ -41,6 +42,12 @@ set env ANTHROPIC_API_KEY
 set env GOOGLE_GEMINI_API_KEY  
 // If you specify the voice_id of the 棒読みちゃん, she will speak.  
 set env VOICEID
+
+// Read-aloud button (🔊) uses Gemini TTS with GOOGLE_GEMINI_API_KEY.
+// Options :: default gemini-3.8-flash-tts / ja-jp-techagent-7 / ja-jp-advisor-8
+set env GEMINI_TTS_MODEL gemini-3.8-flash-tts
+set env GEMINI_TTS_VOICE_FEMALE ja-jp-techagent-7
+set env GEMINI_TTS_VOICE_MALE ja-jp-advisor-8
 
 // Options :: use model each ai
 set env CHATGPT_MODELS gpt-4o.gpt-4o-mini

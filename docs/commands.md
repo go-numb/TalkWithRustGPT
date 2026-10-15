@@ -89,6 +89,27 @@ invoke("gemini_request", { b: number, msg: string, src: string }) => Promise<str
 
 ---
 
+## `gemini_tts`
+
+テキストを Gemini TTS (Interactions API) で音声に変換します。画面のスピーカーボタンが使用します。
+
+```typescript
+invoke<ArrayBuffer>("gemini_tts", { text: string, voice: "female" | "male" }) => Promise<ArrayBuffer>
+```
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| `text` | `string` | 読み上げるテキスト (2000文字以内、空文字は不可) |
+| `voice` | `string` | `"female"` = 女性の声、`"male"` = 男性の声 |
+
+**戻り値**: WAV 音声 (RIFF ヘッダ付き、24kHz・モノラル・16bit PCM) のバイナリ
+
+- モデル: `GEMINI_TTS_MODEL` (デフォルト `gemini-3.8-flash-tts`)
+- 音声: `GEMINI_TTS_VOICE_FEMALE` (デフォルト `ja-jp-techagent-7`) / `GEMINI_TTS_VOICE_MALE` (デフォルト `ja-jp-advisor-8`)
+- `GOOGLE_GEMINI_API_KEY` が未設定、テキストが空・長すぎる、不明な `voice`、API エラーの場合は reject されます
+
+---
+
 ## `memo`
 
 現在の会話履歴をファイルに保存します。

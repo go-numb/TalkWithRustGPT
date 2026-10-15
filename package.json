@@ -1,16 +1,17 @@
 {
   "name": "talkwithrustv2",
   "private": true,
-  "version": "0.1.10",
+  "version": "0.1.11",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/requestQueue.test.mjs",
+    "test": "node --test tests/requestQueue.test.mjs tests/speech.test.mjs",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },
   "dependencies": {
+    "@ant-design/icons": "^5.6.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "antd": "^5.24.7",

@@ -31,6 +31,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import "./App.css";
 import { Flex, Space, Row, Col, Button, Select, Image, Form, Input, Typography, message } from "antd";
+import { LoadingOutlined, MutedOutlined, SoundOutlined } from "@ant-design/icons";
 const { TextArea } = Input;
 
 import { prompts_list } from "./components/prompts";
@@ -47,6 +48,9 @@ import { ImageComponent, resizeImageAndConvertToBase64 } from "./components/imag
 import { sliceText } from "./common/string";
 import { renderMath } from "./common/math";
 import { RequestQueue } from "./common/requestQueue";
+import {
+  SpeechSession, TTS_VOICES, TtsVoice, createWebAudioPlayer, extractSpeechText, isTtsVoice, splitForSpeech,
+} from "./common/speech";
 
 type Fields = {
   b?: number;
@@ -85,6 +89,18 @@ export const App = () => {
 
   useEffect(() => () => { requestQueue.cancel(); }, [requestQueue]);
 
+  // AI 回答の読み上げ (Gemini TTS)
+  const resultRef = useRef<HTMLDivElement>(null);
+  const [speechSession] = useState(() => new SpeechSession());
+  const [audioPlayer] = useState(() => createWebAudioPlayer());
+  const [speechState, setSpeechState] = useState<"idle" | "loading" | "playing">("idle");
+  const [ttsVoice, setTtsVoice] = useState<TtsVoice>(() => {
+    const saved = localStorage.getItem("ttsVoice");
+    return isTtsVoice(saved) ? saved : "female";
+  });
+
+  useEffect(() => () => { speechSession.stop(); }, [speechSession]);
+
   const IMAGE_SIZE_OPTIONS = [512, 1024, 2048];
   const DEFAULT_IMAGE_SIZE = 1024;
   const [imageMaxSize, setImageMaxSize] = useState<number>(() => {
@@ -106,6 +122,8 @@ export const App = () => {
   const StatusAIClaude = "🤖 Switch to Claude."
   const StatusAIGemini = "🤖 Switch to Gemini."
   const StatusResetMessages = "📝 Done! reset message history."
+  const StatusSpeechLoading = "🔊 Generating voice..."
+  const StatusSpeaking = "🔊 Speaking..."
 
   const {
     transcript,
@@ -153,6 +171,8 @@ export const App = () => {
 
   // resultの内容をhighlight.jsでハイライトする
   useEffect(() => {
+    // 表示中の回答が変わったら、前の回答の読み上げは止める
+    stopSpeaking();
     const code = document.querySelectorAll("pre code");
     code.forEach((block) => {
       hljs.highlightBlock(block as HTMLElement);
@@ -176,6 +196,8 @@ export const App = () => {
         resetTranscript();
         setStatus(StatusStop);
       } else {
+        // 読み上げ音声をマイクが拾って入力・送信しないよう、読み上げを止める
+        stopSpeaking();
         await SpeechRecognition.startListening({
           language: 'ja',
           continuous: true
@@ -199,6 +221,57 @@ export const App = () => {
       }
     }
   }, [transcript]);
+
+  const stopSpeaking = () => {
+    speechSession.stop();
+    setSpeechState("idle");
+    setStatus((previous) =>
+      previous === StatusSpeechLoading || previous === StatusSpeaking ? StatusNone : previous);
+  };
+
+  const speak_result = async () => {
+    if (speechSession.active) {
+      stopSpeaking();
+      return;
+    }
+    const text = resultRef.current ? extractSpeechText(resultRef.current) : "";
+    if (!text) {
+      messageApi.info("読み上げる回答がありません。");
+      return;
+    }
+
+    audioPlayer.unlock();
+    if (voiceIsActive) {
+      // 読み上げ音声をマイクが拾って入力・送信しないよう、音声入力を止める
+      SpeechRecognition.stopListening().then(resetTranscript).catch((err) => {
+        setStatus(`音声入力を停止できませんでした: ${String(err)}`);
+      });
+    }
+
+    const voice = ttsVoice;
+    setSpeechState("loading");
+    setStatus(StatusSpeechLoading);
+    try {
+      const completed = await speechSession.speak(
+        splitForSpeech(text),
+        (chunk) => invoke<ArrayBuffer>("gemini_tts", { text: chunk, voice }),
+        audioPlayer.play,
+        () => {
+          setSpeechState("playing");
+          setStatus(StatusSpeaking);
+        },
+      );
+      if (completed) {
+        setStatus((previous) =>
+          previous === StatusSpeechLoading || previous === StatusSpeaking ? StatusNone : previous);
+      }
+    } catch (err) {
+      setStatus(`読み上げに失敗しました: ${String(err)}`);
+    } finally {
+      // 停止直後に次の読み上げが始まっている場合は、その状態を上書きしない
+      if (!speechSession.active) setSpeechState("idle");
+    }
+  };
 
   const get_image_to_dell3 = (prompt: string) => {
     invoke("chatgpt_request_to_dell3", { size: 1, msg: prompt })
@@ -485,6 +558,20 @@ export const App = () => {
           style={{ height: 40, padding: 0 }}
           icon={<img height={40} src="/vc.png" alt="" />}
         />
+        <Button
+          type="text"
+          onClick={speak_result}
+          disabled={!result}
+          aria-label={speechState === "idle" ? "Read the answer aloud" : "Stop reading aloud"}
+          aria-pressed={speechState !== "idle"}
+          title={speechState === "idle"
+            ? `回答を読み上げる（${TTS_VOICES.find((v) => v.value === ttsVoice)?.label}）`
+            : "読み上げを停止"}
+          className="tts"
+          style={{ height: 40, width: 40, padding: 0, fontSize: 30 }}
+          icon={speechState === "loading" ? <LoadingOutlined />
+            : speechState === "playing" ? <MutedOutlined /> : <SoundOutlined />}
+        />
       </Flex>
 
       <Typography style={{ lineHeight: "1.75" }}>
@@ -512,6 +599,7 @@ export const App = () => {
             {result && (
               <Col span={24}>
                 <div
+                  ref={resultRef}
                   className="code-container markdown-body"
                   onClick={(e) => {
                     const anchor = (e.target as HTMLElement).closest("a");
@@ -565,6 +653,18 @@ export const App = () => {
           onChange={(value) => {
             setImageMaxSize(value);
             localStorage.setItem("imageMaxSize", String(value));
+          }}
+        />
+        {/* 読み上げの声 */}
+        <Select
+          value={ttsVoice}
+          style={{ width: 120, flexShrink: 0 }}
+          title="読み上げの声"
+          aria-label="読み上げの声"
+          options={[...TTS_VOICES]}
+          onChange={(value: TtsVoice) => {
+            setTtsVoice(value);
+            localStorage.setItem("ttsVoice", value);
           }}
         />
       </Flex>

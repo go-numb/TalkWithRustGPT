@@ -3949,7 +3949,7 @@ dependencies = [
 
 [[package]]
 name = "talkwithrustv2"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "ammonia",
  "base64 0.22.1",

@@ -30,6 +30,7 @@ pub fn run() {
             manage::chatgpt::chatgpt_request,
             manage::chatgpt::chatgpt_request_to_dell3,
             manage::gemini::gemini_request,
+            manage::tts::gemini_tts,
             memo,
             memo_and_reset,
             all_messages,
