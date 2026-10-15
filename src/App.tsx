@@ -565,20 +565,6 @@ export const App = () => {
           style={{ height: 40, padding: 0 }}
           icon={<img height={40} src="/vc.png" alt="" />}
         />
-        <Button
-          type="text"
-          onClick={speak_result}
-          disabled={!result}
-          aria-label={speechState === "idle" ? "Read the answer aloud" : "Stop reading aloud"}
-          aria-pressed={speechState !== "idle"}
-          title={speechState === "idle"
-            ? `回答を読み上げる（${TTS_VOICES.find((v) => v.value === ttsVoice)?.label}）`
-            : "読み上げを停止"}
-          className="tts"
-          style={{ height: 40, width: 40, padding: 0, fontSize: 30 }}
-          icon={speechState === "loading" ? <LoadingOutlined />
-            : speechState === "playing" ? <MutedOutlined /> : <SoundOutlined />}
-        />
       </Flex>
 
       <Typography style={{ lineHeight: "1.75" }}>
@@ -662,18 +648,32 @@ export const App = () => {
             localStorage.setItem("imageMaxSize", String(value));
           }}
         />
-        {/* 読み上げの声 */}
-        <Select
-          value={ttsVoice}
-          style={{ width: 120, flexShrink: 0 }}
-          title="読み上げの声"
-          aria-label="読み上げの声"
-          options={[...TTS_VOICES]}
-          onChange={(value: TtsVoice) => {
-            setTtsVoice(value);
-            localStorage.setItem("ttsVoice", value);
-          }}
-        />
+        {/* 読み上げの声と再生ボタン */}
+        <Space.Compact style={{ flexShrink: 0 }}>
+          <Select
+            value={ttsVoice}
+            style={{ width: 120 }}
+            title="読み上げの声"
+            aria-label="読み上げの声"
+            options={[...TTS_VOICES]}
+            onChange={(value: TtsVoice) => {
+              setTtsVoice(value);
+              localStorage.setItem("ttsVoice", value);
+            }}
+          />
+          <Button
+            onClick={speak_result}
+            disabled={!result}
+            aria-label={speechState === "idle" ? "Read the answer aloud" : "Stop reading aloud"}
+            aria-pressed={speechState !== "idle"}
+            title={speechState === "idle"
+              ? `回答を読み上げる（${TTS_VOICES.find((v) => v.value === ttsVoice)?.label}）`
+              : "読み上げを停止"}
+            className="tts"
+            icon={speechState === "loading" ? <LoadingOutlined />
+              : speechState === "playing" ? <MutedOutlined /> : <SoundOutlined />}
+          />
+        </Space.Compact>
       </Flex>
 
       {speechUnavailableMessage && (

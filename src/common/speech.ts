@@ -24,7 +24,9 @@ export function toSpeechText(text: string): string {
 }
 
 // 文末で区切る。英文のピリオドは直後が空白のときだけ文末とみなす (3.14 などを割らない)。
-const SENTENCE = /[^。！？!?\n]*?(?:[。！？!?]+|\.(?=\s)|\n|$)/g;
+const SENTENCE_END = /[^。！？!?\n]*?(?:[。！？!?]+|\.(?=\s)|\n|$)/g;
+// これより短い末尾のまとまりは、言語の手がかりが少なく誤った言語で読まれやすいので直前に連結する。
+const MIN_TAIL_CHARS = 20;
 
 /**
  * 読み上げ用に文単位でまとめて分割する。
@@ -40,7 +42,7 @@ export function splitForSpeech(text: string, maxChars = 400, firstMaxChars = 120
     current = "";
   };
 
-  for (const sentence of text.match(SENTENCE) ?? []) {
+  for (const sentence of text.match(SENTENCE_END) ?? []) {
     if (!sentence.trim()) {
       // 句点直後の改行など。区切りの空白は残し、まとまりの端では flush() で落とす。
       current += sentence;
@@ -58,6 +60,10 @@ export function splitForSpeech(text: string, maxChars = 400, firstMaxChars = 120
     }
   }
   flush();
+  if (chunks.length > 1 && chunks[chunks.length - 1].length < MIN_TAIL_CHARS) {
+    const tail = chunks.pop();
+    chunks[chunks.length - 1] += `\n${tail}`;
+  }
   return chunks;
 }
 

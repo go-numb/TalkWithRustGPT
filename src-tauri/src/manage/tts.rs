@@ -7,11 +7,14 @@ use serde_json::{json, Value};
 const INTERACTIONS_URL: &str = "https://generativelanguage.googleapis.com/v1beta/interactions";
 // 2026-10 時点の最新 TTS モデル。GEMINI_TTS_MODEL で上書きできる。
 const DEFAULT_MODEL: &str = "gemini-3.8-flash-tts";
-// Voice Library (GET /v1beta/voices?language_code=ja-JP) の東京アクセントの音声。
-// どちらも "clear, medium-pitch, and friendly" と説明されている。
-const DEFAULT_FEMALE_VOICE: &str = "ja-jp-techagent-7";
-const DEFAULT_MALE_VOICE: &str = "ja-jp-advisor-8";
-const STYLE: &str = "clear, calm, and natural narration at a steady pace";
+// 入力言語を自動判別する多言語のプリセット音声 (Voice Library の gender で性別を確認済み)。
+// ja-jp-* などのロケール固有の音声は、英文を日本語に翻訳して読むことがあるため既定にしない。
+// Erinome: "Clear, articulate, and precise" / Charon: "Informative and steady"
+const DEFAULT_FEMALE_VOICE: &str = "Erinome";
+const DEFAULT_MALE_VOICE: &str = "Charon";
+// 回答は原文のまま読む。ロケール固有の音声を環境変数で指定した場合の翻訳も防ぐ。
+const STYLE: &str = "Read the transcript exactly as written, in its original language. \
+Never translate. Clear, calm, and natural narration at a steady pace.";
 // フロントエンドは文単位で分割して送る。1 回のリクエストが長くなり過ぎないよう上限を設ける。
 const MAX_CHARS: usize = 2000;
 
@@ -139,19 +142,27 @@ mod tests {
         assert_eq!(voice_name("female").unwrap(), DEFAULT_FEMALE_VOICE);
         assert_eq!(voice_name("male").unwrap(), DEFAULT_MALE_VOICE);
         assert!(voice_name("Kore").is_err());
+
+        std::env::set_var("GEMINI_TTS_VOICE_MALE", " ja-jp-advisor-8 ");
+        assert_eq!(voice_name("male").unwrap(), "ja-jp-advisor-8");
+        std::env::remove_var("GEMINI_TTS_VOICE_MALE");
     }
 
     #[test]
     fn test_request_body_keeps_style_out_of_transcript() {
-        let body = request_body("gemini-3.8-flash-tts", "ja-jp-advisor-8", "こんにちは");
+        let body = request_body("gemini-3.8-flash-tts", "Charon", "こんにちは");
         let content = &body["input"][0]["content"][0];
         assert_eq!(body["model"], "gemini-3.8-flash-tts");
         assert_eq!(content["text"], "こんにちは");
         assert_eq!(content["annotations"][0]["type"], "speech_metadata");
+        assert!(content["annotations"][0]["style"]
+            .as_str()
+            .unwrap()
+            .contains("Never translate"));
         assert_eq!(body["response_format"]["type"], "audio");
         assert_eq!(
             body["generation_config"]["speech_config"][0]["voice"],
-            "ja-jp-advisor-8"
+            "Charon"
         );
     }
 
@@ -189,7 +200,7 @@ mod tests {
     async fn live_gemini_tts_returns_wav() {
         dotenv::dotenv().ok();
         for voice in ["female", "male"] {
-            let wav = synthesize("読み上げのテストです。", voice)
+            let wav = synthesize("読み上げのテストです。This is a test.", voice)
                 .await
                 .unwrap_or_else(|e| panic!("{}: {}", voice, e));
             assert_eq!(&wav[..4], b"RIFF", "{}", voice);
