@@ -105,7 +105,8 @@ invoke<ArrayBuffer>("gemini_tts", { text: string, voice: "female" | "male" }) =>
 **戻り値**: WAV 音声 (RIFF ヘッダ付き、24kHz・モノラル・16bit PCM) のバイナリ
 
 - モデル: `GEMINI_TTS_MODEL` (デフォルト `gemini-3.8-flash-tts`)
-- 音声: `GEMINI_TTS_VOICE_FEMALE` (デフォルト `ja-jp-techagent-7`) / `GEMINI_TTS_VOICE_MALE` (デフォルト `ja-jp-advisor-8`)
+- 音声: `GEMINI_TTS_VOICE_FEMALE` (デフォルト `Erinome`) / `GEMINI_TTS_VOICE_MALE` (デフォルト `Charon`)
+- テキストは翻訳せず原文の言語のまま読むよう指示します
 - `GOOGLE_GEMINI_API_KEY` が未設定、テキストが空・長すぎる、不明な `voice`、API エラーの場合は reject されます
 
 ---

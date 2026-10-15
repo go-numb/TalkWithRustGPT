@@ -33,8 +33,8 @@ VOICEID=1
 | `GOOGLE_GEMINI_API_KEY` | Gemini 使用時 | Google の Gemini API キー |
 | `VOICEID` | 任意 | 棒読みちゃんのボイス番号。未設定時は音声読み上げをスキップ |
 | `GEMINI_TTS_MODEL` | 任意 | 読み上げボタンの TTS モデル (デフォルト: `gemini-3.8-flash-tts`) |
-| `GEMINI_TTS_VOICE_FEMALE` | 任意 | 「女性の声」の音声 ID (デフォルト: `ja-jp-techagent-7`) |
-| `GEMINI_TTS_VOICE_MALE` | 任意 | 「男性の声」の音声 ID (デフォルト: `ja-jp-advisor-8`) |
+| `GEMINI_TTS_VOICE_FEMALE` | 任意 | 「女性の声」の音声 ID (デフォルト: `Erinome`) |
+| `GEMINI_TTS_VOICE_MALE` | 任意 | 「男性の声」の音声 ID (デフォルト: `Charon`) |
 
 > 読み上げボタン (Gemini TTS) は `GOOGLE_GEMINI_API_KEY` を使用します。
 > 低レイテンシ・低コストを優先する場合は `GEMINI_TTS_MODEL=gemini-3.8-flash-lite-tts` を指定できます。

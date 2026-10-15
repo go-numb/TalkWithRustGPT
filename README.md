@@ -44,10 +44,10 @@ set env GOOGLE_GEMINI_API_KEY
 set env VOICEID
 
 // Read-aloud button (🔊) uses Gemini TTS with GOOGLE_GEMINI_API_KEY.
-// Options :: default gemini-3.8-flash-tts / ja-jp-techagent-7 / ja-jp-advisor-8
+// Options :: default gemini-3.8-flash-tts / Erinome / Charon (multilingual, reads the original language)
 set env GEMINI_TTS_MODEL gemini-3.8-flash-tts
-set env GEMINI_TTS_VOICE_FEMALE ja-jp-techagent-7
-set env GEMINI_TTS_VOICE_MALE ja-jp-advisor-8
+set env GEMINI_TTS_VOICE_FEMALE Erinome
+set env GEMINI_TTS_VOICE_MALE Charon
 
 // Options :: use model each ai
 set env CHATGPT_MODELS gpt-4o.gpt-4o-mini

@@ -84,17 +84,20 @@ user: <次のメッセージ>
 
 ## 回答の読み上げ (Gemini TTS)
 
-画面左下のスピーカーボタン (🔊) をクリックすると、表示中の AI の回答を Google Gemini TTS で読み上げます。
+入力欄上部の「読み上げの声」ドロップダウンの右隣にある再生ボタン (🔊) をクリックすると、表示中の AI の回答を Google Gemini TTS で読み上げます。
 読み上げ中にもう一度クリックすると停止します。
 
-- 声: 入力欄上部のドロップダウンで「女性の声」「男性の声」を選択 (選択は次回起動時も保持)
+- 声: 「女性の声」「男性の声」を選択 (選択は次回起動時も保持)
 - モデル: `gemini-3.8-flash-tts` (2026年9月リリースの Gemini 3.8 Flash TTS)
-- 音声: Voice Library の東京アクセントの日本語音声
+- 音声: 入力言語を自動判別する多言語のプリセット音声。回答は翻訳せず原文の言語のまま読みます (英語の回答は英語で読む)
 
 | 選択 | 音声 ID | Voice Library の説明 |
 |------|---------|---------------------|
-| 女性の声 | `ja-jp-techagent-7` | Tokyo Japanese, female, clear, medium-pitch, and friendly |
-| 男性の声 | `ja-jp-advisor-8` | Tokyo Japanese, male, clear, medium-pitch, and friendly |
+| 女性の声 | `Erinome` | female, Clear, articulate, and precise voice with a medium pitch |
+| 男性の声 | `Charon` | male, Informative and steady voice with a low pitch |
+
+> `ja-jp-*` などロケール固有の音声は、英文を日本語に翻訳して読むことがあるため既定にしていません。
+> 環境変数で指定した場合も、原文どおり読むよう TTS に指示します。
 
 読み上げの動作:
 

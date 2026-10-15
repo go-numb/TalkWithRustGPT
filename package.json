@@ -1,7 +1,7 @@
 {
   "name": "talkwithrustv2",
   "private": true,
-  "version": "0.1.11",
+  "version": "0.1.12",
   "type": "module",
   "scripts": {
     "test": "node --test tests/requestQueue.test.mjs tests/speech.test.mjs",
