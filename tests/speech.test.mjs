@@ -9,7 +9,7 @@ const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
   fileName: 'speech.ts',
 }).outputText;
-const { SpeechSession, splitForSpeech, toSpeechText, isTtsVoice } =
+const { SpeechSession, splitForSpeech, toSpeechText, isTtsVoice, toArrayBuffer } =
   await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 
 function deferred() {
@@ -29,6 +29,13 @@ const textOf = (audio) => new TextDecoder().decode(audio);
 test('removes the response footer and blank lines before reading', () => {
   const text = '回答です。\n\n\n  次の段落。 \n\nModel: gemini-3.8-flash, Total token: 30, Elaps: 2s';
   assert.equal(toSpeechText(text), '回答です。\n次の段落。');
+});
+
+test('normalizes IPC audio to an ArrayBuffer', () => {
+  const buffer = new Uint8Array([82, 73, 70, 70]).buffer;
+  assert.equal(toArrayBuffer(buffer), buffer);
+  assert.equal(textOf(toArrayBuffer([82, 73, 70, 70])), 'RIFF', 'postMessage fallback sends a number array');
+  assert.equal(textOf(toArrayBuffer(new Uint8Array([82, 73, 70, 70]))), 'RIFF');
 });
 
 test('accepts only the supported voices', () => {

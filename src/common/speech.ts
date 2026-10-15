@@ -61,6 +61,12 @@ export function splitForSpeech(text: string, maxChars = 400, firstMaxChars = 120
   return chunks;
 }
 
+/** Tauri の IPC は通常 ArrayBuffer を返すが、postMessage へのフォールバック時は数値配列で届く。 */
+export function toArrayBuffer(data: ArrayBuffer | ArrayLike<number>): ArrayBuffer {
+  if (data instanceof ArrayBuffer) return data;
+  return Uint8Array.from(data).buffer as ArrayBuffer;
+}
+
 export type Synthesize = (text: string) => Promise<ArrayBuffer>;
 export type PlayAudio = (audio: ArrayBuffer, signal: AbortSignal) => Promise<void>;
 

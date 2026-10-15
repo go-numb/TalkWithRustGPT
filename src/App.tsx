@@ -50,6 +50,7 @@ import { renderMath } from "./common/math";
 import { RequestQueue } from "./common/requestQueue";
 import {
   SpeechSession, TTS_VOICES, TtsVoice, createWebAudioPlayer, extractSpeechText, isTtsVoice, splitForSpeech,
+  toArrayBuffer,
 } from "./common/speech";
 
 type Fields = {
@@ -240,21 +241,27 @@ export const App = () => {
       return;
     }
 
+    // 自動再生制限を避けるため、await より前のクリック処理内で音声出力を有効にする
     audioPlayer.unlock();
-    if (voiceIsActive) {
-      // 読み上げ音声をマイクが拾って入力・送信しないよう、音声入力を止める
-      SpeechRecognition.stopListening().then(resetTranscript).catch((err) => {
-        setStatus(`音声入力を停止できませんでした: ${String(err)}`);
-      });
-    }
-
     const voice = ttsVoice;
     setSpeechState("loading");
     setStatus(StatusSpeechLoading);
+    if (voiceIsActive) {
+      // 読み上げ音声をマイクが拾って入力・送信しないよう、音声入力を止めてから読み上げる
+      try {
+        await SpeechRecognition.stopListening();
+        resetTranscript();
+      } catch (err) {
+        setSpeechState("idle");
+        setStatus(`音声入力を停止できないため、読み上げを中止しました: ${String(err)}`);
+        return;
+      }
+    }
+
     try {
       const completed = await speechSession.speak(
         splitForSpeech(text),
-        (chunk) => invoke<ArrayBuffer>("gemini_tts", { text: chunk, voice }),
+        (chunk) => invoke<ArrayBuffer | number[]>("gemini_tts", { text: chunk, voice }).then(toArrayBuffer),
         audioPlayer.play,
         () => {
           setSpeechState("playing");
