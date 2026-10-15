@@ -73,6 +73,12 @@ test('keeps line breaks that follow a sentence end', () => {
   assert.deepEqual(splitForSpeech('見出し\n一つ目。\n二つ目。'), ['見出し\n一つ目。\n二つ目。']);
 });
 
+test('joins a very short last chunk to the previous one', () => {
+  const sentence = 'あ'.repeat(15) + '。';
+  assert.deepEqual(splitForSpeech(sentence + sentence + 'はい。', 17, 17), [sentence, `${sentence}\nはい。`]);
+  assert.deepEqual(splitForSpeech('OK.'), ['OK.'], 'a short answer is still read');
+});
+
 test('returns no chunks for blank text', () => {
   assert.deepEqual(splitForSpeech('  \n '), []);
 });

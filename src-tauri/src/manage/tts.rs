@@ -142,6 +142,10 @@ mod tests {
         assert_eq!(voice_name("female").unwrap(), DEFAULT_FEMALE_VOICE);
         assert_eq!(voice_name("male").unwrap(), DEFAULT_MALE_VOICE);
         assert!(voice_name("Kore").is_err());
+
+        std::env::set_var("GEMINI_TTS_VOICE_MALE", " ja-jp-advisor-8 ");
+        assert_eq!(voice_name("male").unwrap(), "ja-jp-advisor-8");
+        std::env::remove_var("GEMINI_TTS_VOICE_MALE");
     }
 
     #[test]
