@@ -35,6 +35,7 @@ API: Google Gemini with image
 - [x] command matome & save(use filename from first #tag)
 - [x] textfile drug and drop, insert message.
 - [x] read AI answers aloud with Gemini TTS (female / male voice)
+- [x] settings tab (TTS model, voices, image resize limit)
 
 ## Required
 set env CHATGPTTOKEN  
@@ -44,6 +45,7 @@ set env GOOGLE_GEMINI_API_KEY
 set env VOICEID
 
 // Read-aloud button (🔊) uses Gemini TTS with GOOGLE_GEMINI_API_KEY.
+// Model and voices are chosen in the Settings tab; these env vars only set its defaults.
 // Options :: default gemini-3.8-flash-tts / Erinome / Charon (multilingual, reads the original language)
 set env GEMINI_TTS_MODEL gemini-3.8-flash-tts
 set env GEMINI_TTS_VOICE_FEMALE Erinome

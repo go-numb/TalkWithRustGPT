@@ -2,10 +2,11 @@ use std::time::Duration;
 
 use base64::Engine;
 use reqwest::Client;
+use serde::Serialize;
 use serde_json::{json, Value};
 
 const INTERACTIONS_URL: &str = "https://generativelanguage.googleapis.com/v1beta/interactions";
-// 2026-10 時点の最新 TTS モデル。GEMINI_TTS_MODEL で上書きできる。
+// 2026-10 時点の最新 TTS モデル。設定タブまたは GEMINI_TTS_MODEL で変更できる。
 const DEFAULT_MODEL: &str = "gemini-3.8-flash-tts";
 // 入力言語を自動判別する多言語のプリセット音声 (Voice Library の gender で性別を確認済み)。
 // ja-jp-* などのロケール固有の音声は、英文を日本語に翻訳して読むことがあるため既定にしない。
@@ -18,15 +19,39 @@ Never translate. Clear, calm, and natural narration at a steady pace.";
 // フロントエンドは文単位で分割して送る。1 回のリクエストが長くなり過ぎないよう上限を設ける。
 const MAX_CHARS: usize = 2000;
 
-/// テキストを Gemini TTS で読み上げ音声 (WAV, 24kHz, mono, 16bit) に変換する
-/// voice: "female" または "male"
-#[tauri::command]
-pub async fn gemini_tts(text: String, voice: String) -> Result<tauri::ipc::Response, String> {
-    // 音声はバイナリのまま渡す (JSON 配列にしない)。フロントエンドでは ArrayBuffer になる。
-    Ok(tauri::ipc::Response::new(synthesize(&text, &voice).await?))
+/// 設定タブの既定値。環境変数があればそれを、なければ組み込みの値を返す。
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TtsDefaults {
+    model: String,
+    female_voice: String,
+    male_voice: String,
 }
 
-async fn synthesize(text: &str, voice: &str) -> Result<Vec<u8>, String> {
+#[tauri::command]
+pub fn tts_defaults() -> TtsDefaults {
+    TtsDefaults {
+        model: env_or("GEMINI_TTS_MODEL", DEFAULT_MODEL),
+        female_voice: env_or("GEMINI_TTS_VOICE_FEMALE", DEFAULT_FEMALE_VOICE),
+        male_voice: env_or("GEMINI_TTS_VOICE_MALE", DEFAULT_MALE_VOICE),
+    }
+}
+
+/// テキストを Gemini TTS で読み上げ音声 (WAV, 24kHz, mono, 16bit) に変換する
+/// voice: 音声名 (例: "Erinome")、model: TTS モデル (例: "gemini-3.8-flash-tts")
+#[tauri::command]
+pub async fn gemini_tts(
+    text: String,
+    voice: String,
+    model: String,
+) -> Result<tauri::ipc::Response, String> {
+    // 音声はバイナリのまま渡す (JSON 配列にしない)。フロントエンドでは ArrayBuffer になる。
+    Ok(tauri::ipc::Response::new(
+        synthesize(&text, &voice, &model).await?,
+    ))
+}
+
+async fn synthesize(text: &str, voice: &str, model: &str) -> Result<Vec<u8>, String> {
     let text = text.trim();
     if text.is_empty() {
         return Err("読み上げるテキストがありません".to_string());
@@ -37,11 +62,16 @@ async fn synthesize(text: &str, voice: &str) -> Result<Vec<u8>, String> {
             MAX_CHARS
         ));
     }
-    let voice_name = voice_name(voice)?;
+    if !is_valid_id(voice) {
+        return Err(format!("invalid voice: {}", voice));
+    }
+    if !is_valid_id(model) {
+        return Err(format!("invalid model: {}", model));
+    }
     let key = std::env::var("GOOGLE_GEMINI_API_KEY")
         .map_err(|_| "GOOGLE_GEMINI_API_KEY が設定されていません".to_string())?;
 
-    let body = request_body(&model(), &voice_name, text);
+    let body = request_body(model, voice, text);
     let client = Client::builder()
         .timeout(Duration::from_secs(120))
         .build()
@@ -66,16 +96,12 @@ async fn synthesize(text: &str, voice: &str) -> Result<Vec<u8>, String> {
     extract_audio(&value)
 }
 
-fn model() -> String {
-    env_or("GEMINI_TTS_MODEL", DEFAULT_MODEL)
-}
-
-fn voice_name(voice: &str) -> Result<String, String> {
-    match voice {
-        "female" => Ok(env_or("GEMINI_TTS_VOICE_FEMALE", DEFAULT_FEMALE_VOICE)),
-        "male" => Ok(env_or("GEMINI_TTS_VOICE_MALE", DEFAULT_MALE_VOICE)),
-        _ => Err(format!("unknown voice: {}", voice)),
-    }
+/// 音声名・モデル名として受け付ける文字 (src/common/settings.ts の isTtsId と同じ規則)
+fn is_valid_id(id: &str) -> bool {
+    (1..=64).contains(&id.len())
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
 fn env_or(key: &str, default: &str) -> String {
@@ -136,16 +162,48 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_voice_name_maps_gender_and_rejects_unknown() {
+    fn test_tts_defaults_prefers_env_over_builtin() {
+        std::env::remove_var("GEMINI_TTS_MODEL");
         std::env::remove_var("GEMINI_TTS_VOICE_FEMALE");
-        std::env::remove_var("GEMINI_TTS_VOICE_MALE");
-        assert_eq!(voice_name("female").unwrap(), DEFAULT_FEMALE_VOICE);
-        assert_eq!(voice_name("male").unwrap(), DEFAULT_MALE_VOICE);
-        assert!(voice_name("Kore").is_err());
-
         std::env::set_var("GEMINI_TTS_VOICE_MALE", " ja-jp-advisor-8 ");
-        assert_eq!(voice_name("male").unwrap(), "ja-jp-advisor-8");
+        let defaults = tts_defaults();
         std::env::remove_var("GEMINI_TTS_VOICE_MALE");
+
+        assert_eq!(
+            defaults,
+            TtsDefaults {
+                model: DEFAULT_MODEL.to_string(),
+                female_voice: DEFAULT_FEMALE_VOICE.to_string(),
+                male_voice: "ja-jp-advisor-8".to_string(),
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(&defaults).unwrap()["femaleVoice"],
+            DEFAULT_FEMALE_VOICE
+        );
+    }
+
+    #[test]
+    fn test_is_valid_id_accepts_voice_and_model_names_only() {
+        for id in [
+            "Erinome",
+            "ja-jp-advisor-8",
+            "gemini-3.8-flash-tts",
+            "voice_abc",
+        ] {
+            assert!(is_valid_id(id), "{}", id);
+        }
+        for id in ["", "has space", "a/b", "\"quote", &"x".repeat(65)] {
+            assert!(!is_valid_id(id), "{}", id);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_synthesize_rejects_invalid_voice_before_request() {
+        let err = synthesize("テスト", "bad voice", DEFAULT_MODEL)
+            .await
+            .unwrap_err();
+        assert!(err.contains("invalid voice"), "{}", err);
     }
 
     #[test]
@@ -199,10 +257,14 @@ mod tests {
     #[ignore]
     async fn live_gemini_tts_returns_wav() {
         dotenv::dotenv().ok();
-        for voice in ["female", "male"] {
-            let wav = synthesize("読み上げのテストです。This is a test.", voice)
-                .await
-                .unwrap_or_else(|e| panic!("{}: {}", voice, e));
+        for voice in [DEFAULT_FEMALE_VOICE, DEFAULT_MALE_VOICE] {
+            let wav = synthesize(
+                "読み上げのテストです。This is a test.",
+                voice,
+                DEFAULT_MODEL,
+            )
+            .await
+            .unwrap_or_else(|e| panic!("{}: {}", voice, e));
             assert_eq!(&wav[..4], b"RIFF", "{}", voice);
             assert!(wav.len() > 44, "{}", voice);
         }
