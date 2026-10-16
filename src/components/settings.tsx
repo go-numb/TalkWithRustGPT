@@ -8,6 +8,8 @@ import { TtsVoice } from "../common/speech";
 
 export interface Props {
   tts: TtsSettings;
+  // 環境変数を反映した既定値。一覧にない値でも選択肢に残す。
+  ttsDefaults: TtsSettings;
   ttsVoice: TtsVoice;
   isTtsCustomized: boolean;
   imageMaxSize: number;
@@ -22,7 +24,9 @@ export interface Props {
 }
 
 export const SettingsComponent = (props: Props) => {
-  const voiceRow = (gender: TtsVoice, label: string, options: readonly TtsOption[], value: string) => {
+  const voiceRow = (
+    gender: TtsVoice, label: string, options: readonly TtsOption[], value: string, defaultValue: string,
+  ) => {
     const previewing = props.preview?.voice === gender ? props.preview.state : null;
     return (
       <Flex gap="small" align="center">
@@ -31,7 +35,7 @@ export const SettingsComponent = (props: Props) => {
           value={value}
           style={{ flex: 1, minWidth: 0 }}
           aria-label={`${label}の声`}
-          options={withCurrentOption(options, value)}
+          options={withCurrentOption(options, value, defaultValue)}
           onChange={(voice: string) =>
             props.onTtsChange(gender === "female" ? { femaleVoice: voice } : { maleVoice: voice })}
         />
@@ -55,7 +59,7 @@ export const SettingsComponent = (props: Props) => {
           <Select
             value={props.tts.model}
             aria-label="読み上げモデル"
-            options={withCurrentOption(TTS_MODELS, props.tts.model)}
+            options={withCurrentOption(TTS_MODELS, props.tts.model, props.ttsDefaults.model)}
             onChange={(model: string) => props.onTtsChange({ model })}
           />
         </Form.Item>
@@ -66,8 +70,8 @@ export const SettingsComponent = (props: Props) => {
             style={{ width: "100%" }}
           >
             <Flex vertical gap="small">
-              {voiceRow("female", "女性", FEMALE_VOICES, props.tts.femaleVoice)}
-              {voiceRow("male", "男性", MALE_VOICES, props.tts.maleVoice)}
+              {voiceRow("female", "女性", FEMALE_VOICES, props.tts.femaleVoice, props.ttsDefaults.femaleVoice)}
+              {voiceRow("male", "男性", MALE_VOICES, props.tts.maleVoice, props.ttsDefaults.maleVoice)}
             </Flex>
           </Radio.Group>
         </Form.Item>

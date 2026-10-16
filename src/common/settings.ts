@@ -90,11 +90,15 @@ export function parseSavedTtsSettings(json: string | null): Partial<TtsSettings>
   return saved;
 }
 
-/** 環境変数で一覧にない音声やモデルが指定されている場合も、選択肢に表示する。 */
-export function withCurrentOption(options: readonly TtsOption[], value: string): TtsOption[] {
-  return options.some((option) => option.value === value)
-    ? [...options]
-    : [{ value, label: value }, ...options];
+/**
+ * 一覧にない音声やモデル (環境変数で指定した既定値や現在の値) も選択肢に表示する。
+ * 既定値を渡しておくと、別の値を選んだ後でも選び直せる。
+ */
+export function withCurrentOption(options: readonly TtsOption[], ...values: string[]): TtsOption[] {
+  const extra = [...new Set(values)]
+    .filter((value) => !options.some((option) => option.value === value))
+    .map((value) => ({ value, label: value }));
+  return [...extra, ...options];
 }
 
 const STORAGE_KEY = "ttsSettings";

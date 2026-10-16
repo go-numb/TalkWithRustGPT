@@ -204,6 +204,11 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.contains("invalid voice"), "{}", err);
+
+        let err = synthesize("テスト", DEFAULT_MALE_VOICE, "models/../x")
+            .await
+            .unwrap_err();
+        assert!(err.contains("invalid model"), "{}", err);
     }
 
     #[test]

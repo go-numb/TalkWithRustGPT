@@ -575,7 +575,7 @@ export const App = () => {
 
   const chatTab = (
     <Flex gap="large" vertical>
-      {/* 上部固定 */}
+      {/* 左下固定 */}
       <Flex className="fixed-left-bottom" gap="large" justify="end" align="center" vertical={false} >
         <Button
           type="text"
@@ -804,6 +804,7 @@ export const App = () => {
   const settingsTab = (
     <SettingsComponent
       tts={ttsSettings}
+      ttsDefaults={ttsDefaults}
       ttsVoice={ttsVoice}
       isTtsCustomized={Object.keys(savedTts).length > 0}
       imageMaxSize={imageMaxSize}

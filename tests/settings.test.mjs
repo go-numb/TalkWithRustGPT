@@ -11,7 +11,7 @@ const compiled = ts.transpileModule(source, {
 }).outputText;
 const {
   BUILTIN_TTS_DEFAULTS, FEMALE_VOICES, MALE_VOICES, TTS_MODELS,
-  isTtsId, mergeTtsSettings, parseSavedTtsSettings, withCurrentOption,
+  isTtsId, loadSavedTtsSettings, mergeTtsSettings, parseSavedTtsSettings, storeSavedTtsSettings, withCurrentOption,
 } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
 
 test('settings saved in the settings tab override the defaults field by field', () => {
@@ -45,6 +45,32 @@ test('shows an env-specified value that is not in the built-in list', () => {
   const options = withCurrentOption(MALE_VOICES, 'ja-jp-advisor-8');
   assert.deepEqual(options[0], { value: 'ja-jp-advisor-8', label: 'ja-jp-advisor-8' });
   assert.equal(options.length, MALE_VOICES.length + 1);
+});
+
+test('keeps the env default selectable after another voice is chosen', () => {
+  const options = withCurrentOption(MALE_VOICES, 'Charon', 'ja-jp-advisor-8');
+  assert.ok(options.some((o) => o.value === 'ja-jp-advisor-8'));
+  assert.equal(options.length, MALE_VOICES.length + 1);
+  assert.equal(withCurrentOption(MALE_VOICES, 'x-1', 'x-1').length, MALE_VOICES.length + 1, 'no duplicates');
+});
+
+test('stores only overrides and removes the key when cleared', () => {
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  };
+  try {
+    storeSavedTtsSettings({ maleVoice: 'Iapetus' });
+    assert.deepEqual(loadSavedTtsSettings(), { maleVoice: 'Iapetus' });
+    storeSavedTtsSettings({});
+    assert.equal(store.size, 0);
+    assert.deepEqual(loadSavedTtsSettings(), {});
+  } finally {
+    delete globalThis.localStorage;
+  }
+  assert.deepEqual(loadSavedTtsSettings(), {}, 'missing storage falls back to no overrides');
 });
 
 test('built-in defaults are listed and voice lists do not overlap', () => {
