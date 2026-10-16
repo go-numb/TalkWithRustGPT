@@ -32,12 +32,12 @@ VOICEID=1
 | `ANTHROPIC_API_KEY` | Claude 使用時 | Anthropic の API キー |
 | `GOOGLE_GEMINI_API_KEY` | Gemini 使用時 | Google の Gemini API キー |
 | `VOICEID` | 任意 | 棒読みちゃんのボイス番号。未設定時は音声読み上げをスキップ |
-| `GEMINI_TTS_MODEL` | 任意 | 読み上げボタンの TTS モデル (デフォルト: `gemini-3.8-flash-tts`) |
-| `GEMINI_TTS_VOICE_FEMALE` | 任意 | 「女性の声」の音声 ID (デフォルト: `Erinome`) |
-| `GEMINI_TTS_VOICE_MALE` | 任意 | 「男性の声」の音声 ID (デフォルト: `Charon`) |
+| `GEMINI_TTS_MODEL` | 任意 | 読み上げの TTS モデルの既定値 (デフォルト: `gemini-3.8-flash-tts`) |
+| `GEMINI_TTS_VOICE_FEMALE` | 任意 | 女性の声の音声 ID の既定値 (デフォルト: `Erinome`) |
+| `GEMINI_TTS_VOICE_MALE` | 任意 | 男性の声の音声 ID の既定値 (デフォルト: `Charon`) |
 
-> 読み上げボタン (Gemini TTS) は `GOOGLE_GEMINI_API_KEY` を使用します。
-> 低レイテンシ・低コストを優先する場合は `GEMINI_TTS_MODEL=gemini-3.8-flash-lite-tts` を指定できます。
+> 読み上げ (Gemini TTS) は `GOOGLE_GEMINI_API_KEY` を使用します。
+> モデルと声は画面の設定タブで変更でき、設定タブの値が環境変数より優先されます。`GEMINI_TTS_*` は設定タブの既定値になります。
 > 音声 ID は Voice Library (`GET https://generativelanguage.googleapis.com/v1beta/voices?language_code=ja-JP`) で確認できます。
 
 > **注意**: `CHATGPTTOKEN` または `ANTHROPIC_API_KEY` のいずれか一方がないと、起動時にアラートが表示されます。

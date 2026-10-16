@@ -91,23 +91,38 @@ invoke("gemini_request", { b: number, msg: string, src: string }) => Promise<str
 
 ## `gemini_tts`
 
-テキストを Gemini TTS (Interactions API) で音声に変換します。画面のスピーカーボタンが使用します。
+テキストを Gemini TTS (Interactions API) で音声に変換します。読み上げボタンと設定タブの試聴が使用します。
 
 ```typescript
-invoke<ArrayBuffer>("gemini_tts", { text: string, voice: "female" | "male" }) => Promise<ArrayBuffer>
+invoke<ArrayBuffer>("gemini_tts", { text: string, voice: string, model: string }) => Promise<ArrayBuffer>
 ```
 
 | パラメータ | 型 | 説明 |
 |-----------|-----|------|
 | `text` | `string` | 読み上げるテキスト (2000文字以内、空文字は不可) |
-| `voice` | `string` | `"female"` = 女性の声、`"male"` = 男性の声 |
+| `voice` | `string` | 音声名 (例: `"Erinome"`、`"Charon"`)。英数字と `.` `_` `-` の 64 文字以内 |
+| `model` | `string` | TTS モデル (例: `"gemini-3.8-flash-tts"`)。`voice` と同じ文字種 |
 
 **戻り値**: WAV 音声 (RIFF ヘッダ付き、24kHz・モノラル・16bit PCM) のバイナリ
 
-- モデル: `GEMINI_TTS_MODEL` (デフォルト `gemini-3.8-flash-tts`)
-- 音声: `GEMINI_TTS_VOICE_FEMALE` (デフォルト `Erinome`) / `GEMINI_TTS_VOICE_MALE` (デフォルト `Charon`)
 - テキストは翻訳せず原文の言語のまま読むよう指示します
-- `GOOGLE_GEMINI_API_KEY` が未設定、テキストが空・長すぎる、不明な `voice`、API エラーの場合は reject されます
+- `GOOGLE_GEMINI_API_KEY` が未設定、テキストが空・長すぎる、`voice` / `model` が不正、API エラーの場合は reject されます
+
+---
+
+## `tts_defaults`
+
+設定タブの読み上げ設定の既定値を返します。環境変数があればその値、なければ組み込みの値です。
+
+```typescript
+invoke("tts_defaults") => Promise<{ model: string, femaleVoice: string, maleVoice: string }>
+```
+
+| フィールド | 環境変数 | 組み込みの値 |
+|-----------|---------|-------------|
+| `model` | `GEMINI_TTS_MODEL` | `gemini-3.8-flash-tts` |
+| `femaleVoice` | `GEMINI_TTS_VOICE_FEMALE` | `Erinome` |
+| `maleVoice` | `GEMINI_TTS_VOICE_MALE` | `Charon` |
 
 ---
 

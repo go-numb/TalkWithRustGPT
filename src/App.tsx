@@ -30,7 +30,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import "./App.css";
-import { Flex, Space, Row, Col, Button, Select, Image, Form, Input, Typography, message } from "antd";
+import { Flex, Space, Row, Col, Button, Select, Image, Form, Input, Tabs, Typography, message } from "antd";
 import { LoadingOutlined, MutedOutlined, SoundOutlined } from "@ant-design/icons";
 const { TextArea } = Input;
 
@@ -44,6 +44,7 @@ import hljs from 'highlight.js';
 import 'highlight.js/styles/default.css';
 import 'katex/dist/katex.min.css';
 import { DrugComponent } from "./components/drug";
+import { SettingsComponent } from "./components/settings";
 import { ImageComponent, resizeImageAndConvertToBase64 } from "./components/image";
 import { sliceText } from "./common/string";
 import { renderMath } from "./common/math";
@@ -52,6 +53,9 @@ import {
   SpeechSession, TTS_VOICES, TtsVoice, createWebAudioPlayer, extractSpeechText, isTtsVoice, splitForSpeech,
   toArrayBuffer,
 } from "./common/speech";
+import {
+  BUILTIN_TTS_DEFAULTS, TtsSettings, loadSavedTtsSettings, mergeTtsSettings, storeSavedTtsSettings,
+} from "./common/settings";
 
 type Fields = {
   b?: number;
@@ -71,6 +75,7 @@ interface ChatRequest {
 }
 
 const AI_NAMES = ["Claude", "ChatGPT", "Gemini"];
+const TTS_PREVIEW_TEXT = "こんにちは。選択した声のサンプルです。This is a sample of the selected voice.";
 
 export const App = () => {
   const [messageApi, contextHolder] = message.useMessage();
@@ -100,7 +105,22 @@ export const App = () => {
     return isTtsVoice(saved) ? saved : "female";
   });
 
+  // 読み上げの対象。answer = 表示中の回答、female / male = 設定タブでの試聴
+  const [speechTarget, setSpeechTarget] = useState<"answer" | TtsVoice | null>(null);
+  // 設定タブで変更した項目 (savedTts) を、環境変数を反映した既定値 (ttsDefaults) に重ねて使う
+  const [ttsDefaults, setTtsDefaults] = useState<TtsSettings>(BUILTIN_TTS_DEFAULTS);
+  const [savedTts, setSavedTts] = useState<Partial<TtsSettings>>(loadSavedTtsSettings);
+  const ttsSettings = mergeTtsSettings(ttsDefaults, savedTts);
+  const voiceNameOf = (voice: TtsVoice) => voice === "female" ? ttsSettings.femaleVoice : ttsSettings.maleVoice;
+  const [activeTab, setActiveTab] = useState("chat");
+
   useEffect(() => () => { speechSession.stop(); }, [speechSession]);
+
+  useEffect(() => {
+    invoke<TtsSettings>("tts_defaults")
+      .then((defaults) => setTtsDefaults(mergeTtsSettings(BUILTIN_TTS_DEFAULTS, defaults)))
+      .catch((err) => console.error(`tts_defaults > ${err}`));
+  }, []);
 
   const IMAGE_SIZE_OPTIONS = [512, 1024, 2048];
   const DEFAULT_IMAGE_SIZE = 1024;
@@ -226,24 +246,16 @@ export const App = () => {
   const stopSpeaking = () => {
     speechSession.stop();
     setSpeechState("idle");
+    setSpeechTarget(null);
     setStatus((previous) =>
       previous === StatusSpeechLoading || previous === StatusSpeaking ? StatusNone : previous);
   };
 
-  const speak_result = async () => {
-    if (speechSession.active) {
-      stopSpeaking();
-      return;
-    }
-    const text = resultRef.current ? extractSpeechText(resultRef.current) : "";
-    if (!text) {
-      messageApi.info("読み上げる回答がありません。");
-      return;
-    }
-
+  const speak = async (text: string, target: "answer" | TtsVoice, voice: string) => {
     // 自動再生制限を避けるため、await より前のクリック処理内で音声出力を有効にする
     audioPlayer.unlock();
-    const voice = ttsVoice;
+    const model = ttsSettings.model;
+    setSpeechTarget(target);
     setSpeechState("loading");
     setStatus(StatusSpeechLoading);
     if (voiceIsActive) {
@@ -253,6 +265,7 @@ export const App = () => {
         resetTranscript();
       } catch (err) {
         setSpeechState("idle");
+        setSpeechTarget(null);
         setStatus(`音声入力を停止できないため、読み上げを中止しました: ${String(err)}`);
         return;
       }
@@ -261,7 +274,7 @@ export const App = () => {
     try {
       const completed = await speechSession.speak(
         splitForSpeech(text),
-        (chunk) => invoke<ArrayBuffer | number[]>("gemini_tts", { text: chunk, voice }).then(toArrayBuffer),
+        (chunk) => invoke<ArrayBuffer | number[]>("gemini_tts", { text: chunk, voice, model }).then(toArrayBuffer),
         audioPlayer.play,
         () => {
           setSpeechState("playing");
@@ -276,8 +289,44 @@ export const App = () => {
       setStatus(`読み上げに失敗しました: ${String(err)}`);
     } finally {
       // 停止直後に次の読み上げが始まっている場合は、その状態を上書きしない
-      if (!speechSession.active) setSpeechState("idle");
+      if (!speechSession.active) {
+        setSpeechState("idle");
+        setSpeechTarget(null);
+      }
     }
+  };
+
+  const speak_result = () => {
+    if (speechSession.active && speechTarget === "answer") {
+      stopSpeaking();
+      return;
+    }
+    const text = resultRef.current ? extractSpeechText(resultRef.current) : "";
+    if (!text) {
+      messageApi.info("読み上げる回答がありません。");
+      return;
+    }
+    // 試聴中なら speak() が試聴を止めて回答の読み上げに切り替える
+    void speak(text, "answer", voiceNameOf(ttsVoice));
+  };
+
+  const preview_voice = (voice: TtsVoice) => {
+    if (speechSession.active && speechTarget === voice) {
+      stopSpeaking();
+      return;
+    }
+    void speak(TTS_PREVIEW_TEXT, voice, voiceNameOf(voice));
+  };
+
+  const update_tts_settings = (patch: Partial<TtsSettings>) => {
+    const next = { ...savedTts, ...patch };
+    setSavedTts(next);
+    storeSavedTtsSettings(next);
+  };
+
+  const reset_tts_settings = () => {
+    setSavedTts({});
+    storeSavedTtsSettings({});
   };
 
   const get_image_to_dell3 = (prompt: string) => {
@@ -519,11 +568,14 @@ export const App = () => {
     }
   };
 
-  return (
+  const answerSpeech = speechTarget === "answer" ? speechState : "idle";
+  const preview = speechTarget && speechTarget !== "answer" && speechState !== "idle"
+    ? { voice: speechTarget, state: speechState }
+    : null;
+
+  const chatTab = (
     <Flex gap="large" vertical>
-      {contextHolder}
-      <DrugComponent onFileDrop={onDrop} />
-      {/* 上部固定 */}
+      {/* 左下固定 */}
       <Flex className="fixed-left-bottom" gap="large" justify="end" align="center" vertical={false} >
         <Button
           type="text"
@@ -637,43 +689,20 @@ export const App = () => {
             form.setFieldValue("msg", value);
           }}
         />
-        {/* 画像最大サイズ設定 */}
-        <Select
-          value={imageMaxSize}
-          style={{ width: 120, flexShrink: 0 }}
-          title="画像リサイズ上限"
-          options={IMAGE_SIZE_OPTIONS.map(s => ({ label: `${s}px`, value: s }))}
-          onChange={(value) => {
-            setImageMaxSize(value);
-            localStorage.setItem("imageMaxSize", String(value));
-          }}
+        {/* 表示中の回答を読み上げる (声とモデルは設定タブで選ぶ) */}
+        <Button
+          onClick={speak_result}
+          disabled={!result}
+          aria-label={answerSpeech === "idle" ? "Read the answer aloud" : "Stop reading aloud"}
+          aria-pressed={answerSpeech !== "idle"}
+          title={answerSpeech === "idle"
+            ? `回答を読み上げる（${TTS_VOICES.find((v) => v.value === ttsVoice)?.label}: ${voiceNameOf(ttsVoice)}）`
+            : "読み上げを停止"}
+          className="tts"
+          style={{ flexShrink: 0 }}
+          icon={answerSpeech === "loading" ? <LoadingOutlined />
+            : answerSpeech === "playing" ? <MutedOutlined /> : <SoundOutlined />}
         />
-        {/* 読み上げの声と再生ボタン */}
-        <Space.Compact style={{ flexShrink: 0 }}>
-          <Select
-            value={ttsVoice}
-            style={{ width: 120 }}
-            title="読み上げの声"
-            aria-label="読み上げの声"
-            options={[...TTS_VOICES]}
-            onChange={(value: TtsVoice) => {
-              setTtsVoice(value);
-              localStorage.setItem("ttsVoice", value);
-            }}
-          />
-          <Button
-            onClick={speak_result}
-            disabled={!result}
-            aria-label={speechState === "idle" ? "Read the answer aloud" : "Stop reading aloud"}
-            aria-pressed={speechState !== "idle"}
-            title={speechState === "idle"
-              ? `回答を読み上げる（${TTS_VOICES.find((v) => v.value === ttsVoice)?.label}）`
-              : "読み上げを停止"}
-            className="tts"
-            icon={speechState === "loading" ? <LoadingOutlined />
-              : speechState === "playing" ? <MutedOutlined /> : <SoundOutlined />}
-          />
-        </Space.Compact>
       </Flex>
 
       {speechUnavailableMessage && (
@@ -768,6 +797,45 @@ export const App = () => {
           </Button>
         </Form.Item>
       </Form>
+
+    </Flex>
+  );
+
+  const settingsTab = (
+    <SettingsComponent
+      tts={ttsSettings}
+      ttsDefaults={ttsDefaults}
+      ttsVoice={ttsVoice}
+      isTtsCustomized={Object.keys(savedTts).length > 0}
+      imageMaxSize={imageMaxSize}
+      imageSizeOptions={IMAGE_SIZE_OPTIONS}
+      preview={preview}
+      onTtsChange={update_tts_settings}
+      onTtsVoiceChange={(voice) => {
+        setTtsVoice(voice);
+        localStorage.setItem("ttsVoice", voice);
+      }}
+      onTtsReset={reset_tts_settings}
+      onPreview={preview_voice}
+      onImageMaxSizeChange={(value) => {
+        setImageMaxSize(value);
+        localStorage.setItem("imageMaxSize", String(value));
+      }}
+    />
+  );
+
+  return (
+    <Flex gap="large" vertical>
+      {contextHolder}
+      <DrugComponent onFileDrop={onDrop} />
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { key: "chat", label: "チャット", children: chatTab },
+          { key: "settings", label: "設定", children: settingsTab },
+        ]}
+      />
 
       <Space className="footer-fixed">
         {status}
